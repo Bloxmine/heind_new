@@ -10,9 +10,10 @@ export const PU = {
     barrier: { name: 'BARRIER', col: '#ffe23a', hint: 'blocks one hit' },
     patch: { name: 'PATCH', col: '#7affd0', hint: 'repairs your car' },
     mine: { name: 'MINE', col: '#ff3a6e', hint: 'drop behind, or throw ahead' },
-    pulse: { name: 'PULSE', col: '#ff9a3a', hint: 'shoves nearby cars away' }
+    pulse: { name: 'PULSE', col: '#ff9a3a', hint: 'shoves nearby cars away' },
+    storm: { name: 'STORM', col: '#8a6aff', hint: 'electric fields ahead of the leader' }
 };
-const WEIGHTS = { volt: 4, seeker: 2, nitro: 3, barrier: 2, patch: 1.5, mine: 2.5, pulse: 2 };
+const WEIGHTS = { volt: 4, seeker: 2, nitro: 3, barrier: 2, patch: 1.5, mine: 2.5, pulse: 2, storm: 1.6 };
 export const randomType = () => {
     let r = Math.random() * Object.values(WEIGHTS).reduce((a, b) => a + b, 0);
     for (const [k, w] of Object.entries(WEIGHTS)) if ((r -= w) <= 0) return k;
@@ -32,6 +33,9 @@ function drawIcon(x, type, col) {
         case 'barrier': P([[3, 2, 10, 1], [3, 3, 1, 6], [12, 3, 1, 6], [4, 9, 1, 2], [11, 9, 1, 2], [5, 11, 1, 1], [10, 11, 1, 1], [6, 12, 4, 1], [7, 13, 2, 1], [5, 4, 6, 1], [5, 5, 1, 4], [7, 6, 2, 3]]); break;
         case 'patch': P([[6, 2, 4, 12], [2, 6, 12, 4]]); x.fillStyle = '#0a0d12'; P([[7, 3, 2, 10], [3, 7, 10, 2]]); x.fillStyle = col; P([[7, 7, 2, 2]]); break;
         case 'mine': P([[5, 5, 6, 6], [4, 6, 8, 4], [6, 4, 4, 8], [7, 1, 2, 3], [7, 12, 2, 3], [1, 7, 3, 2], [12, 7, 3, 2], [3, 3, 2, 2], [11, 3, 2, 2], [3, 11, 2, 2], [11, 11, 2, 2]]); x.fillStyle = '#0a0d12'; P([[7, 7, 2, 2]]); break;
+        case 'storm':
+            P([[5, 1, 6, 1], [3, 2, 2, 1], [11, 2, 2, 1], [2, 3, 1, 2], [13, 3, 1, 2], [1, 5, 1, 6], [14, 5, 1, 6], [2, 11, 1, 2], [13, 11, 1, 2], [3, 13, 2, 1], [11, 13, 2, 1], [5, 14, 6, 1]]);
+            P([[8, 4, 2, 1], [7, 5, 2, 1], [6, 6, 2, 1], [6, 7, 4, 1], [8, 8, 2, 1], [7, 9, 2, 1], [6, 10, 2, 1], [6, 11, 1, 1]]); break;
         case 'pulse': P([[6, 7, 4, 2], [7, 6, 2, 4]]); x.globalAlpha = 0.85; P([[4, 4, 1, 8], [11, 4, 1, 8], [4, 4, 8, 1], [4, 11, 8, 1]]); x.globalAlpha = 0.6; P([[1, 2, 1, 12], [14, 2, 1, 12], [2, 1, 12, 1], [2, 14, 12, 1]]); x.globalAlpha = 1; break;
     }
 }
@@ -120,7 +124,8 @@ const ahead = (me, other, N) => { const d = (other.q.prog - me.q.prog + N) % N; 
 export class Weapons {
     constructor(scene, track, fx) {
         this.scene = scene; this.track = track; this.fx = fx;
-        this.shots = []; this.mines = []; this.rings = [];
+        this.shots = []; this.mines = []; this.rings = []; this.fields = [];
+        this.rank = null;      // set by the race: cars in race order, leader first
         this.geo = {
             volt: new THREE.OctahedronGeometry(0.5, 0).scale(0.5, 0.5, 2.2),
             seeker: new THREE.IcosahedronGeometry(0.55, 0),
@@ -143,8 +148,8 @@ export class Weapons {
         a.needsUpdate = true;
     }
     clear() {
-        [...this.shots, ...this.mines, ...this.rings].forEach((o) => this.scene.remove(o.m));
-        this.shots = []; this.mines = []; this.rings = [];
+        [...this.shots, ...this.mines, ...this.rings, ...this.fields].forEach((o) => this.scene.remove(o.m));
+        this.shots = []; this.mines = []; this.rings = []; this.fields = [];
     }
     // the best target in front (or behind) of a car: inside a cone, the closest
     pick(me, cars, back, cone = 0.6, range = 90) {
@@ -213,7 +218,23 @@ export class Weapons {
             }
             fx.sound('pulse'); fx.burst(0.6);
         }
+        else if (type === 'nitro' && back) { car.vx *= 0.5; car.vz *= 0.5; fx.sound('block'); fx.sparkle(car, '#4aff7a'); }
         else if (type === 'nitro') { car.nitro = 2.4; fx.sound('nitro'); if (car.isPlayer) fx.burst(0.8); }
+        else if (type === 'storm') {
+            // three electric fields on the road ahead of the race leader (or the next car, if you are leading)
+            const order = this.rank ? this.rank() : cars;
+            const target = order[0] === car ? order[1] : order[0];
+            const at = (target || car).q.i, N = this.track.N, S = this.track.S;
+            const lanes = [-0.3, 0, 0.3].sort(() => Math.random() - 0.5);
+            [16, 30, 44].forEach((ahead, k) => {
+                const s = S[(at + ahead) % N], o = lanes[k] * s.w;
+                const m = glows(new THREE.Mesh(this.geo.field || (this.geo.field = new THREE.IcosahedronGeometry(3.2, 1)), glowMat('#8a6aff', { wireframe: true })));
+                m.position.set(s.x + s.sx * o, s.y + 1.2, s.z + s.sz * o);
+                this.scene.add(m);
+                this.fields.push({ m, x: m.position.x, z: m.position.z, owner: car, arm: 1.2, life: 8, hit: new Set() });
+            });
+            fx.sound('zap');
+        }
         else if (type === 'barrier') { car.shield = 15; fx.sound('shield'); }
         else if (type === 'patch') { car.health = Math.min(100, car.health + 50); fx.sound('patch'); fx.sparkle(car, '#7affd0'); }
         if (--slot.ammo <= 0) { car.slots.splice(car.sel || 0, 1); car.sel = Math.min(car.sel || 0, Math.max(0, car.slots.length - 1)); }
@@ -280,12 +301,29 @@ export class Weapons {
             for (const c of cars) {
                 if (boom || c.wrecked > 0 || (c === m.owner && m.arm > -1.5)) continue;
                 if (m.arm <= 0 && (c.x - m.x) ** 2 + (c.z - m.z) ** 2 < 2.5 * 2.5) {
-                    this.hit(c, { by: m.owner, kind: 'mine', dmg: 26, up: 7.5, spin: (Math.random() - 0.5) * 6, slow: 0.55, flip: (Math.random() < 0.5 ? -1 : 1) * 6 });
+                    this.hit(c, { by: m.owner, kind: 'mine', dmg: 24, up: 2.5, spin: (Math.random() < 0.5 ? -1 : 1) * (7 + Math.random() * 3), slow: 0.45 });
                     fx.boom(m.x, m.y + 0.5, m.z, '#ff3a6e', 1);
                     boom = true;
                 }
             }
             if (boom) { this.scene.remove(m.m); this.mines.splice(i, 1); }
+        }
+        for (let i = this.fields.length - 1; i >= 0; i--) {
+            const f = this.fields[i];
+            f.arm -= dt; f.life -= dt;
+            const live = f.arm <= 0;
+            f.m.rotation.y += dt * (live ? 3 : 0.8); f.m.rotation.x += dt * 1.3;
+            f.m.scale.setScalar(live ? 1 + Math.sin(t * 20 + i) * 0.06 : 0.4 + (1.2 - f.arm) * 0.5);
+            f.m.visible = live || Math.floor(t * 8) % 2 === 0;
+            if (live) for (const c of cars) {
+                if (c.wrecked > 0 || f.hit.has(c)) continue;
+                if ((c.x - f.x) ** 2 + (c.z - f.z) ** 2 < 3.4 * 3.4) {
+                    f.hit.add(c);
+                    this.hit(c, { by: f.owner, kind: 'storm', dmg: 12, spin: (Math.random() < 0.5 ? -1 : 1) * 7, slow: 0.45 });
+                    this.fx.boom(c.x, c.y + 0.8, c.z, '#8a6aff', 0.5);
+                }
+            }
+            if (f.life <= 0) { this.scene.remove(f.m); this.fields.splice(i, 1); }
         }
         for (let i = this.rings.length - 1; i >= 0; i--) {
             const r = this.rings[i];

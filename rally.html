@@ -34,6 +34,7 @@
         <li class="mb-item">
             <button type="button" class="mb-btn" aria-expanded="false">Race</button>
             <ul class="mb-drop">
+                <li><button type="button" data-act="race">Race</button></li>
                 <li><button type="button" data-act="drive">Test Drive</button></li>
                 <li><button type="button" data-act="garage">Garage&hellip;</button></li>
                 <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
@@ -57,6 +58,11 @@
             <button type="button" class="mb-btn" aria-expanded="false">Options</button>
             <ul class="mb-drop">
                 <li><button type="button" data-opt="sound"><i class="chk"></i>Sound</button></li>
+                <li><button type="button" data-opt="music"><i class="chk"></i>Music</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="diff:easy"><i class="chk"></i>Easy Rivals</button></li>
+                <li><button type="button" data-opt="diff:normal"><i class="chk"></i>Normal Rivals</button></li>
+                <li><button type="button" data-opt="diff:hard"><i class="chk"></i>Hard Rivals</button></li>
                 <li class="sep"></li>
                 <li><button type="button" data-opt="look:night"><i class="chk"></i>Night Drive</button></li>
                 <li><button type="button" data-opt="look:sea"><i class="chk"></i>SeaOS Colour</button></li>
@@ -137,7 +143,9 @@
                         <button type="button" data-cycle="lines">Speed lines <b>ON</b></button>
                         <button type="button" data-cycle="fps">Frames &#9664;<b>30 FPS</b>&#9654;</button>
                         <button type="button" data-cycle="wobble">Wobble &#9664;<b>ON</b>&#9654;</button>
+                        <button type="button" data-cycle="diff">Rivals &#9664;<b>NORMAL</b>&#9654;</button>
                         <button type="button" data-cycle="sound">Sound <b>ON</b></button>
+                        <button type="button" data-cycle="music">Music <b>ON</b></button>
                         <button type="button" data-act="full">Full screen <b>OFF</b></button>
                     </div>
                     <footer class="bkeys"><span><kbd>&#8629;</kbd>Change</span><span><kbd>Esc</kbd>Back</span></footer>
@@ -171,6 +179,17 @@
                     <div class="b-slots" id="h-slots"></div>
                     <p class="rmsg" id="h-msg" hidden></p>
                     <p class="rwrong" id="h-wrong" hidden>WRONG WAY</p>
+                </div>
+
+                <div class="ov bpanel results" id="results" hidden>
+                    <h2>results</h2>
+                    <ol class="res" id="res-list"></ol>
+                    <p class="res-fans">Fans <b id="res-fans">0</b> <i class="heart">&#9829;</i></p>
+                    <div class="menu row">
+                        <button type="button" data-act="restart">Race again</button>
+                        <button type="button" data-act="next">Next track</button>
+                        <button type="button" data-act="quit">Menu</button>
+                    </div>
                 </div>
 
                 <div class="ov bpanel" id="pause" hidden>

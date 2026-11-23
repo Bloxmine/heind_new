@@ -9,6 +9,8 @@ import { CarAudio } from './audio.js';
 import { Cockpit } from './cockpit.js';
 import { Rain, Droplets, addPuddles, rainy } from './weather.js';
 import { PU, Pickups, Weapons, iconURL } from './powerups.js';
+import { Driver, RIVALS, plan } from './ai.js';
+import { Music } from './music.js';
 
 const $ = (q, r = document) => r.querySelector(q);
 const $$ = (q, r = document) => [...r.querySelectorAll(q)];
@@ -22,7 +24,11 @@ const fmt = (t) => (t == null || !isFinite(t) ? '-:--.--' : `${Math.floor(t / 60
 const title = (s) => s.charAt(0) + s.slice(1).toLowerCase();
 
 /* ---------- settings ---------- */
-const CFG = Object.assign({ look: 'night', fps: 30, wobble: 1, crt: true, sound: true, lines: true, ink: true, glow: true, view: 'chase', weather: 'auto', track: 'alpine', car: 'volta', targets: true }, store.get('heind.rally', {}));
+const CFG = Object.assign({ look: 'night', fps: 30, wobble: 1, crt: true, sound: true, lines: true, ink: true, glow: true, view: 'chase', weather: 'auto', track: 'alpine', car: 'volta', targets: true, diff: 'normal', music: true }, store.get('heind.rally', {}));
+const DIFFS = { easy: { name: 'EASY', skill: 0.84 }, normal: { name: 'NORMAL', skill: 0.91 }, hard: { name: 'HARD', skill: 0.98 } };
+if (!DIFFS[CFG.diff]) CFG.diff = 'normal';
+const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2' };
+const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
 const WEATHERS = ['auto', 'dry', 'rain', 'snow'];
 if (!WEATHERS.includes(CFG.weather)) CFG.weather = 'auto';
 const trackById = (id) => TRACKS.find((t) => t.id === id) || TRACKS[0];
@@ -251,10 +257,12 @@ function botDrive(b) {
 /* ---------- audio ---------- */
 const audio = new CarAudio();
 audio.on = CFG.sound;
+const music = new Music(audio);
+music.on = CFG.music;
 document.addEventListener('pointerdown', () => audio.start());
 
 /* ---------- cameras ---------- */
-let camH = 0, camY = 0, fov = 62;
+let camH = 0, camY = 0, fov = 62, shake = 0;
 function chase(dt, snap) {
     const k = snap ? 1 : Math.min(1, dt * 4.2);
     camH += angDiff(car.h, camH) * k;
@@ -263,7 +271,8 @@ function chase(dt, snap) {
     const gq = track.query(cx, cz, car.q.i);
     const wantY = Math.max(car.y + up, gq.y + 1.2);
     camY = snap ? wantY : camY + (wantY - camY) * Math.min(1, dt * 6);
-    cam.position.set(cx, camY, cz);
+    const sh = shake * shake;
+    cam.position.set(cx + (Math.random() - 0.5) * sh * 0.8, camY + (Math.random() - 0.5) * sh * 0.6, cz + (Math.random() - 0.5) * sh * 0.8);
     cam.lookAt(car.x + Math.sin(camH) * 4, car.y + 1.1, car.z + Math.cos(camH) * 4);
     const wantF = 60 + Math.min(12, car.speed * 0.22) + (car.nitro > 0 ? 8 : 0);
     fov += (wantF - fov) * Math.min(1, dt * 3);
@@ -310,6 +319,7 @@ function drawMinimap() {
         const [px, py] = mmT(c.x, c.z);
         mmx.fillStyle = '#04070f'; mmx.fillRect(Math.round(px) - 2, Math.round(py) - 2, 5, 5);
         mmx.fillStyle = c === car ? '#ffe23a' : '#ff3a6e'; mmx.fillRect(Math.round(px) - 1, Math.round(py) - 1, 3, 3);
+        if (c === car) { mmx.fillStyle = '#ffffff'; mmx.fillRect(Math.round(px), Math.round(py), 1, 1); }
     }
 }
 
@@ -321,7 +331,7 @@ let msgT = 0, burst = 0, fans = 0;
 const tint = { col: new THREE.Color(), t: 0, max: 1 };
 const message = (txt, t = 1.6, bad) => {
     const el = $('#h-msg'); el.textContent = txt; el.hidden = false;
-    el.classList.toggle('bad', !!bad); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); msgT = t;
+    el.classList.toggle('bad', !!bad); el.classList.toggle('big', /^([0-9]|GO!)$/.test(txt)); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); msgT = t;
 };
 function feed(text, pts, cls) {
     const box = $('#h-feed');
@@ -338,7 +348,7 @@ function updateHUD() {
     const N = track.N, score = (c) => c.lapN * N + c.q.prog;
     const pos = 1 + cars.filter((c) => c !== car && score(c) > score(car)).length;
     setText('h-pos', String(pos)); setText('h-of', String(cars.length));
-    setText('h-lap', String(Math.max(1, car.lapN)));
+    setText('h-lap', race && race.kind === 'race' ? `${clamp(car.lapN, 1, race.laps)}/${race.laps}` : String(Math.max(1, car.lapN)));
     setText('h-time', lapStarted ? fmt(lapT) : '-:--.--');
     setText('h-best', fmt(best));
     setText('h-speed', String(Math.round(car.speed * 3.6)));
@@ -370,7 +380,7 @@ const fx = {
         const name = PU[kind] ? title(PU[kind].name) : title(kind);
         if (what === 'wreck') target.wrecking = true;
         if (by === car && target !== car) {
-            if (what === 'hit') feed(`${name} Hit`, { volt: 35, seeker: 60, mine: 45, pulse: 25 }[kind] || 20, 'hot');
+            if (what === 'hit') feed(`${name} Hit`, { volt: 35, seeker: 60, mine: 45, pulse: 25, storm: 40 }[kind] || 20, 'hot');
             if (what === 'wreck') { feed('Takedown', 100, 'hot'); message('TAKEDOWN!', 1.6); }
             if (what === 'blocked') feed(`${name} Blocked`, 0);
         }
@@ -387,15 +397,37 @@ let mode = 'menu', paused = false;
 let lapT = 0, lapStarted = false, best = null, wrongWay = 0;
 const bestKey = () => 'heind.rally.best.' + track.def.id;
 
-function startDrive() {
+let race = null, raceT = 0, results = 0;
+const rankCars = () => { const N = track.N; return [...cars].sort((a, b) => (b.done ? 1e9 - b.finishT : b.lapN * N + b.q.prog) - (a.done ? 1e9 - a.finishT : a.lapN * N + a.q.prog)); };
+function startDrive(kind = race ? race.kind : 'race') {
     mode = 'drive';
     document.body.dataset.mode = 'drive';
     paused = false;
     hideAll(); show('hud'); setMenu(null);
+    race = { kind, laps: kind === 'race' ? trackById(CFG.track).laps || 3 : 0, count: kind === 'race' ? 3.99 : 0, order: [], done: false };
+    raceT = 0; results = 0;
     showCar(carById(CFG.car));
     cockpit.setVisible(CFG.view === 'cockpit');
-    // three practice cars spread out ahead
-    if (CFG.targets) {
+    if (kind === 'race') {
+        // a full grid: the player starts in the middle, seven rivals around them
+        const grid = 8, mine = 5;
+        car.place(track.gridSlot(mine).x, track.gridSlot(mine).y, track.gridSlot(mine).z, track.gridSlot(mine).heading);
+        car.lastGy = car.y; car.lastProg = car.q.prog;
+        const others = CARS.filter((c) => c.id !== CFG.car);
+        const base = DIFFS[CFG.diff].skill;
+        let r = 0;
+        for (let slot = 0; slot < grid; slot++) {
+            if (slot === mine) continue;
+            const info = RIVALS[r], spec = others[r % others.length];
+            const b = newCar(spec, slot, false);
+            b.driver = new Driver(b, info, base + (Math.random() - 0.5) * 0.05 + (info.style === 'careful' ? -0.02 : info.style === 'aggressive' ? 0.01 : 0));
+            cars.push(b);
+            r++;
+        }
+        plan(track);
+        music.want(SONG_FOR[track.def.id] || 'race1');
+    } else if (CFG.targets) {
+        music.want(SONG_FOR[track.def.id] || 'race1');
         const others = CARS.filter((c) => c.id !== CFG.car);
         for (let k = 0; k < 3; k++) {
             const i = (track.gridSlot(0).i + 30 + k * 28) % track.N, s = track.S[i];
@@ -407,12 +439,12 @@ function startDrive() {
     }
     pickups = new Pickups(track, scene);
     weapons = new Weapons(scene, track, fx);
+    weapons.rank = rankCars;
     lapT = 0; lapStarted = false; wrongWay = 0; fans = 0;
     best = store.get(bestKey(), null);
     $('#h-feed').innerHTML = '';
     chase(0, true);
-    message('GO!', 1.2);
-    audio.beep(880, 0.25);
+    if (kind !== 'race') { message('GO!', 1.2); audio.beep(880, 0.25); }
 }
 function toMenu(sub) {
     mode = 'menu';
@@ -431,6 +463,8 @@ function laps(c, dt) {
     const N = track.N, p = c.q.prog;
     if (c.lastProg > N * 0.75 && p < N * 0.25) {
         c.lapN++;
+        if (race && race.kind === 'race' && !c.done && c.lapN > race.laps) finish(c);
+        if (c === car && race && race.kind === 'race' && c.lapN === race.laps && !c.done) { message('FINAL LAP', 1.6); audio.beep(1100, 0.2); }
         if (c === car) {
             if (lapStarted) {
                 const t = lapT;
@@ -443,24 +477,87 @@ function laps(c, dt) {
     c.lastProg = p;
     if (c === car && lapStarted) lapT += dt;
 }
+function finish(c) {
+    c.done = true; c.finishT = raceT;
+    race.order.push(c);
+    if (c === car) {
+        const pos = race.order.length;
+        message(`${ordinal(pos).toUpperCase()} PLACE!`, 3, pos > 3);
+        feed(`Finished ${ordinal(pos)}`, [500, 300, 200, 100, 50, 40, 30, 20][pos - 1] || 10, 'hot');
+        audio.fx(pos === 1 ? 'patch' : 'pickup');
+        // the car drives itself from here; the results come up after a moment
+        car.driver = new Driver(car, { name: 'You', style: 'careful' }, 0.82);
+        results = 3;
+    }
+}
+function showResults() {
+    music.want('results');
+    const order = [...race.order, ...rankCars().filter((c) => !c.done)];
+    const win = race.order[0];
+    $('#res-list').innerHTML = order.map((c, i) => {
+        const who = c === car ? 'You' : c.driver ? c.driver.name : '—';
+        const time = c.done ? (c === win ? fmt(c.finishT) : '+' + (c.finishT - win.finishT).toFixed(2)) : 'racing';
+        return `<li class="${c === car ? 'me' : ''}"><span>${i + 1}</span><b>${who}</b><i>${c.spec.name}</i><em>${time}</em></li>`;
+    }).join('');
+    $('#res-fans').textContent = fans;
+    show('results'); setMenu($('#results .menu'));
+}
 function resetCar(c) {
     const s = track.S[c.q.i];
     c.place(s.x, s.y + 0.4, s.z, Math.atan2(s.tx, s.tz));
     c.lastGy = c.y; c.stuckT = 0;
     if (c === car) { chase(0, true); feed('Back on the road', 0); }
 }
+const mass = (c) => (c.spec.hp || 100) / 100 * (c.mesh.B.len / 4.2);
+const circles = (c) => { const L = c.mesh.B.len * 0.27, fx_ = Math.sin(c.h), fz = Math.cos(c.h); return [[c.x + fx_ * L, c.z + fz * L], [c.x - fx_ * L, c.z - fz * L]]; };
 function collide(a, b) {
-    const dx = b.x - a.x, dz = b.z - a.z, d = Math.hypot(dx, dz);
-    if (d > 3.3 || d < 0.01 || Math.abs(a.y - b.y) > 2) return;
-    const nx = dx / d, nz = dz / d, push = (3.3 - d) / 2;
-    a.x -= nx * push; a.z -= nz * push; b.x += nx * push; b.z += nz * push;
+    if (Math.abs(a.x - b.x) > 7 || Math.abs(a.z - b.z) > 7 || Math.abs(a.y - b.y) > 2) return;
+    const R = 2.3;     // two radii of 1.15
+    let best = null;
+    for (const [ax, az] of circles(a)) for (const [bx, bz] of circles(b)) {
+        const dx = bx - ax, dz = bz - az, d = Math.hypot(dx, dz);
+        if (d < R && (!best || d < best.d)) best = { d: Math.max(d, 0.01), nx: dx / (d || 1), nz: dz / (d || 1), cx: (ax + bx) / 2, cz: (az + bz) / 2 };
+    }
+    if (!best) return;
+    const { nx, nz } = best, ma = mass(a), mb = mass(b);
+    const push = R - best.d;
+    a.x -= nx * push * mb / (ma + mb); a.z -= nz * push * mb / (ma + mb);
+    b.x += nx * push * ma / (ma + mb); b.z += nz * push * ma / (ma + mb);
     const rel = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
     if (rel <= 0) return;
-    const j = rel * 0.65;
-    a.vx -= nx * j; a.vz -= nz * j; b.vx += nx * j; b.vz += nz * j;
-    a.w += (Math.random() - 0.5) * rel * 0.05; b.w += (Math.random() - 0.5) * rel * 0.05;
-    if (rel > 9) for (const c of [a, b]) if (c.invuln <= 0 && c.wrecked <= 0) { c.health -= (rel - 9) * 1.6 * 100 / (c.spec.hp || 100); if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, c === a ? b : a, 'wreck', 'crash'); } }
-    if (a === car || b === car) { audio.thud(Math.min(1, rel / 15)); if (rel > 6) burst = Math.max(burst, 0.5); }
+    // a proper impulse: heavier cars shove lighter ones, a little bounce
+    const j = (1 + 0.38) * rel / (1 / ma + 1 / mb);
+    a.vx -= nx * j / ma; a.vz -= nz * j / ma; b.vx += nx * j / mb; b.vz += nz * j / mb;
+    // off-centre hits turn the car: the further from the middle the contact, the more it spins
+    for (const [c, sg, m] of [[a, 1, ma], [b, -1, mb]]) {
+        const rx = best.cx - c.x, rz = best.cz - c.z;
+        const torque = (rx * nz - rz * nx) * sg;
+        c.w += clamp(-torque * j / m * 0.06, -3, 3);
+    }
+    if (rel > 3) sparks(best.cx, (a.y + b.y) / 2 + 0.6, best.cz, rel);
+    if (rel > 9) for (const c of [a, b]) if (c.invuln <= 0 && c.wrecked <= 0 && c.shield <= 0) { c.health -= (rel - 9) * 1.8 * 100 / (c.spec.hp || 100); if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, c === a ? b : a, 'wreck', 'crash'); } }
+    if (a === car || b === car) {
+        audio.thud(Math.min(1, rel / 12)); if (rel > 5) audio.fx('hit');
+        shake = Math.max(shake, Math.min(1, rel / 14)); if (rel > 6) burst = Math.max(burst, 0.5);
+    }
+}
+// bright sparks and a puff of grit where metal meets metal (or concrete)
+function sparks(x, y, z, k) {
+    const n = Math.min(14, 3 + k * 0.8);
+    for (let i = 0; i < n; i++) { const a = Math.random() * 6.28, sp = 3 + Math.random() * k * 0.6; puff(x, y, z, i % 3 ? '#ffd27a' : '#ffffff', Math.cos(a) * sp, 2 + Math.random() * 4, Math.sin(a) * sp, 0.35, 0.05, 0.25 + Math.random() * 0.2); }
+    puff(x, y - 0.3, z, '#808a93', 0, 1, 0, 0.6, 2.4, 0.8);
+}
+// walls: what the car physics reported this step
+function wallHit(c) {
+    const k = c.impact || 0;
+    c.impact = 0;
+    if (k < 3) return;
+    sparks(c.impactX, c.y + 0.5, c.impactZ, k);
+    if (k > 12 && c.invuln <= 0 && c.wrecked <= 0 && c.shield <= 0) {
+        c.health -= (k - 12) * 1.5 * 100 / (c.spec.hp || 100);
+        if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, null, 'wreck', 'crash'); }
+    }
+    if (c === car) { audio.thud(Math.min(1, k / 12)); if (k > 7) audio.fx('hit'); shake = Math.max(shake, Math.min(1, k / 16)); if (k > 9) burst = Math.max(burst, 0.5); }
 }
 // dust, spray and smoke for one car
 function carFx(c) {
@@ -482,12 +579,26 @@ function carFx(c) {
     }
     if ((c.wrecked > 0 || c.health < 35) && Math.random() < (c.wrecked > 0 ? 0.6 : 0.25)) puff(c.x + fx_ * 1.2, c.y + 1, c.z + fz * 1.2, c.wrecked > 0 ? '#2a3139' : '#4f5862', 0, 2.5, 0, 0.6, 2.8, 1.5);
 }
+const HOLD = { steer: 0, throttle: 0, brake: 1, handbrake: false };
 function updDrive(dt) {
+    if (race && race.count > 0) {
+        const before = Math.ceil(race.count);
+        race.count -= dt;
+        const now = Math.ceil(race.count);
+        if (now !== before) {
+            if (now > 0) { message(String(now), 0.9); audio.beep(660, 0.18); }
+            else { message('GO!', 1.2); audio.beep(1320, 0.35); burst = 0.6; }
+        }
+    } else if (race) raceT += dt;
+    const ctx = { track, cars, weapons, rank: rankCars, player: car, pickups };
     for (const c of cars) {
-        c.step(dt, c === car ? readDrive() : botDrive(c));
+        if (race && race.count > 0) { c.vx = c.vz = 0; c.w = 0; continue; }     // everyone waits for GO
+        const inp = c.driver ? c.driver.drive(ctx) : c === car ? readDrive() : botDrive(c);
+        c.step(dt, inp);
+        wallHit(c);
         laps(c, dt);
         if (c.wrecking && c.wrecked <= 0) { c.respawn(); c.wrecking = false; c.lapN = c.lapN; }
-        const thr = c === car ? readDrive().throttle : 1;
+        const thr = race && race.count > 0 ? 0 : c === car && !c.driver ? readDrive().throttle : 1;
         c.stuckT = c.speed < 1 && thr && c.wrecked <= 0 ? c.stuckT + dt : 0;
         if (c.stuckT > 4 || c.y < c.q.y - 6 || (c === car && press('reset'))) resetCar(c);
     }
@@ -531,7 +642,8 @@ function cardIcon(kind) {
     return (iconCache[kind] = c.toDataURL());
 }
 const MAIN_CARDS = [
-    { label: 'race', icon: 'race', desc: 'Test drive with power-ups and three practice cars', act: () => startDrive() },
+    { label: 'race', icon: 'race', desc: 'Eight cars, three laps, every power-up', act: () => startDrive('race') },
+    { label: 'test drive', icon: 'tracks', desc: 'Free laps with power-ups and three practice cars', act: () => startDrive('test') },
     { label: 'tracks', icon: 'tracks', desc: 'Pick where to race', act: () => openCarousel('tracks') },
     { label: 'garage', icon: 'garage', desc: 'Choose your car', act: () => openGarage() },
     { label: 'options', icon: 'options', desc: 'Look, camera, weather, sound', act: () => openPanel('opts') },
@@ -542,7 +654,7 @@ let carousel = { kind: 'main', items: MAIN_CARDS, sel: 0 };
 function trackCards() {
     return TRACKS.map((t) => ({
         label: t.name.toLowerCase(), desc: `${title(t.blurb)} · ${t.weather === 'dry' ? 'dry' : t.weather}`,
-        img: () => { const prev = track; return thumb(t); }, act: () => { CFG.track = t.id; saveCfg(); loadTrack(trackById(CFG.track)); showCar(carById(CFG.car)); openCarousel('main', 1); }
+        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); loadTrack(trackById(CFG.track)); showCar(carById(CFG.car)); openCarousel('main', 2); }
     }));
 }
 // a little glowing outline of a track, for its card
@@ -563,6 +675,7 @@ function thumb(t) {
 }
 function openCarousel(kind, sel) {
     hideAll(); show('title');
+    music.want('menu');
     mode = 'menu'; menu = null;
     const items = kind === 'tracks' ? trackCards() : MAIN_CARDS;
     const start = sel != null ? sel : kind === 'tracks' ? Math.max(0, TRACKS.indexOf(trackById(CFG.track))) : 0;
@@ -596,7 +709,7 @@ function carouselInput() {
     if (press('left')) { carousel.sel = (carousel.sel + n - 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('right')) { carousel.sel = (carousel.sel + 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('ok')) { audio.beep(990, 0.06); carousel.items[carousel.sel].act(); }
-    if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); openCarousel('main', 1); }
+    if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); openCarousel('main', 2); }
 }
 
 /* ---------- garage: the cars in 3D ---------- */
@@ -623,8 +736,8 @@ function garageInput() {
     if (mode !== 'garage') return;
     if (press('left')) { gIdx = (gIdx + CARS.length - 1) % CARS.length; garageShow(); audio.beep(700, 0.04); }
     if (press('right')) { gIdx = (gIdx + 1) % CARS.length; garageShow(); audio.beep(700, 0.04); }
-    if (press('ok')) { CFG.car = CARS[gIdx].id; saveCfg(); audio.fx('pickup'); openCarousel('main', 2); }
-    if (press('back')) { showCar(carById(CFG.car)); openCarousel('main', 2); }
+    if (press('ok')) { CFG.car = CARS[gIdx].id; saveCfg(); audio.fx('pickup'); openCarousel('main', 3); }
+    if (press('back')) { showCar(carById(CFG.car)); openCarousel('main', 3); }
 }
 $('#garage').addEventListener('click', (e) => {
     const a = e.target.closest('.g-arrow');
@@ -646,7 +759,7 @@ function setMenu(el) {
 }
 function markSel() { if (menu) menu.items.forEach((b, j) => b.classList.toggle('sel', j === menu.i)); }
 function menuInput() {
-    if (mode === 'panel' && press('back')) { audio.beep(500, 0.06); openCarousel('main', panel === 'opts' ? 3 : 4); return; }
+    if (mode === 'panel' && press('back')) { audio.beep(500, 0.06); openCarousel('main', panel === 'opts' ? 4 : 5); return; }
     if (!menu || menu.el.closest('[hidden]')) return;
     const n = menu.items.length;
     if (press('mup')) { menu.i = (menu.i + n - 1) % n; markSel(); audio.beep(880, 0.04); }
@@ -659,7 +772,7 @@ function menuInput() {
     if (press('ok')) b.click();
 }
 const show = (id, on = true) => { const el = $('#' + id); if (el) el.hidden = !on; };
-const hideAll = () => ['title', 'hud', 'pause', 'garage', 'opts', 'ctrls'].forEach((id) => show(id, false));
+const hideAll = () => ['title', 'hud', 'pause', 'garage', 'opts', 'ctrls', 'results'].forEach((id) => show(id, false));
 
 function cycle(what, dir) {
     if (what === 'look') { const k = Object.keys(LOOKS); CFG.look = k[(k.indexOf(CFG.look) + dir + k.length) % k.length]; }
@@ -671,6 +784,8 @@ function cycle(what, dir) {
     if (what === 'ink') CFG.ink = !CFG.ink;
     if (what === 'glow') CFG.glow = !CFG.glow;
     if (what === 'view') { CFG.view = CFG.view === 'chase' ? 'cockpit' : 'chase'; if (cockpit) cockpit.setVisible(mode === 'drive' && CFG.view === 'cockpit'); }
+    if (what === 'diff') { const k = Object.keys(DIFFS); CFG.diff = k[(k.indexOf(CFG.diff) + (dir > 0 ? 1 : k.length - 1)) % k.length]; }
+    if (what === 'music') { CFG.music = !CFG.music; music.setOn(CFG.music); }
     if (what === 'weather') { CFG.weather = WEATHERS[(WEATHERS.indexOf(CFG.weather) + (dir > 0 ? 1 : WEATHERS.length - 1)) % WEATHERS.length]; saveCfg(); reloadTrack(); }
     saveCfg(); syncOptions(); audio.beep(660, 0.05);
 }
@@ -686,6 +801,8 @@ function syncOptions() {
     set('fps', CFG.fps + ' FPS');
     set('wobble', ['OFF', 'ON', 'EXTRA'][CFG.wobble]);
     set('sound', CFG.sound ? 'ON' : 'OFF');
+    set('music', CFG.music ? 'ON' : 'OFF');
+    set('diff', DIFFS[CFG.diff].name);
     $('#screen').classList.toggle('crt', CFG.crt);
     $$('.mb-drop [data-opt]').forEach((b) => {
         const [k, v] = b.dataset.opt.split(':');
@@ -704,16 +821,18 @@ function setPause(on) {
 }
 
 const ACTS = {
-    drive: () => startDrive(),
+    drive: () => startDrive('test'),
+    race: () => startDrive('race'),
     garage: () => { if (mode === 'drive') return; openGarage(); },
     resume: () => setPause(false),
-    restart: () => { paused = false; show('pause', false); startDrive(); },
+    restart: () => { paused = false; show('pause', false); show('results', false); startDrive(); },
     quit: () => toMenu(),
+    next: () => { const i = TRACKS.indexOf(trackById(CFG.track)); CFG.track = TRACKS[(i + 1) % TRACKS.length].id; saveCfg(); loadTrack(trackById(CFG.track)); startDrive('race'); },
     pause: () => { if (mode === 'drive') setPause(!paused); },
     full: () => toggleFull(),
     zoom: () => toggleZoom(),
     home: () => { location.href = 'index.html'; },
-    about: () => alertBox('About Gravel Riot', '<p><b>Gravel Riot</b> &middot; checkpoint 3: power-ups</p><p>A cel-shaded rally racer with power-ups, rendered small and run through the same dither as the rest of heind.nl. Built with Three.js; every texture and sound is generated in code.</p><p>Coming next: rivals who race and fight back.</p>'),
+    about: () => alertBox('About Gravel Riot', '<p><b>Gravel Riot</b> &middot; checkpoint 4: rivals</p><p>A cel-shaded rally racer with power-ups, rendered small and run through the same dither as the rest of heind.nl. Built with Three.js; every texture and sound is generated in code.</p><p>Coming next: the cup, time trial with a ghost, and polish.</p>'),
     view: () => cycle('view', 1),
     help: () => { if (mode === 'drive') { setPause(true); return; } openPanel('ctrls'); }
 };
@@ -806,7 +925,7 @@ function frame(now) {
     if (press('view')) cycle('view', 1);
     if (mode === 'drive' && press('pause') && !$('#dialogs').children.length) setPause(!paused);
     else hits.delete('pause');
-    if (mode === 'drive' && !paused) {
+    if (mode === 'drive' && !paused && !(race && race.count > 0) && !car.done) {
         if (press('cycle') && car.slots.length > 1) { car.sel = (car.sel + 1) % car.slots.length; audio.beep(760, 0.04); }
         if (press('fire')) weapons.fire(car, false, cars);
         if (press('fireBack')) weapons.fire(car, true, cars);
@@ -823,6 +942,8 @@ function frame(now) {
             cars.forEach((c) => { c.sync(dt); carFx(c); });
             pickups.update(dt, T, cars, cam, (c, type) => { if (c === car) { audio.fx('pickup'); feed(`${title(PU[type].name)}`, 0); } });
             weapons.update(dt, cars, T);
+            if (!race || race.count <= 0) { const ctx = { track, cars, weapons, rank: rankCars, player: car, pickups }; for (const c of cars) if (c.driver && c !== car) c.driver.tactics(dt, ctx); }
+            if (results > 0 && (results -= dt) <= 0) showResults();
             if (CFG.view === 'cockpit') { cockpit.update(dt, track.def.rain); cockpit.place(cam); }
             else chase(dt);
         } else {
@@ -846,6 +967,7 @@ function frame(now) {
         $('#h-wrong').hidden = !(wrongWay > 0.8 && mode === 'drive');
     }
     engineSound();
+    music.poke();
     updateHUD();
     if (shadow && car) {
         shadow.position.set(car.x, car.q.y + 0.05, car.z);
@@ -856,6 +978,7 @@ function frame(now) {
     sunDisc.position.copy(cam.position).addScaledVector(sunDir, 820);
     sunDisc.lookAt(cam.position);
     burst = Math.max(0, burst - dt * 2.5);
+    shake = Math.max(0, shake - dt * 2.2);
     let lineK = mode === 'drive' && CFG.lines && !paused ? clamp((car.speed - 16) / 30, 0, 1) : 0;
     if (mode === 'drive' && car.nitro > 0) lineK = 1;
     tint.t = Math.max(0, tint.t - dt);
@@ -914,5 +1037,6 @@ requestAnimationFrame(frame);
 window.RALLY = {
     scene, cam, CFG, keys, hits, syncOptions, startDrive, toMenu, openGarage,
     set override(f) { override = f; }, get car() { return car; }, get cars() { return cars; }, get track() { return track; }, get mode() { return mode; },
+    get race() { return race; }, rankCars: () => rankCars(), showResults: () => showResults(),
     give: (type, c = car) => { c.slots.push({ type, ammo: PU[type].ammo || 1 }); }, get weapons() { return weapons; }
 };

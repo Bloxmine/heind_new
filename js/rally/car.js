@@ -326,10 +326,16 @@ export class Car {
             this.x -= nq.sx * sg * push; this.z -= nq.sz * sg * push;
             const out = (this.vx * nq.sx + this.vz * nq.sz) * sg;
             if (out > 0) {
-                this.vx -= nq.sx * sg * out * 1.3; this.vz -= nq.sz * sg * out * 1.3;
-                this.vx *= 0.97; this.vz *= 0.97;
+                // bounce off (a third of the impact comes back), scrub speed by how head-on it was,
+                // and kick the car's nose away from the wall
+                const sp = Math.hypot(this.vx, this.vz) || 1;
+                this.vx -= nq.sx * sg * out * 1.35; this.vz -= nq.sz * sg * out * 1.35;
+                const scrub = Math.min(0.55, (out / sp) * 0.7 + 0.03);
+                this.vx *= 1 - scrub; this.vz *= 1 - scrub;
+                const fwdIn = Math.sin(this.h) * nq.sx * sg + Math.cos(this.h) * nq.sz * sg;   // >0 nose into the wall
+                this.w += -sg * out * 0.09 * (fwdIn >= 0 ? 1 : -1) * Math.sign(this.vf || 1);
                 this.scrape = Math.min(1, out / 8 + 0.2);
-                this.w += sg * out * 0.02;
+                if (out > (this.impact || 0)) { this.impact = out; this.impactX = this.x + nq.sx * sg * 1; this.impactZ = this.z + nq.sz * sg * 1; }
             }
             nq = this.track.query(this.x, this.z, nq.i);
         }

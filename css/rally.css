@@ -91,6 +91,18 @@
 .bctrl dt { color: var(--cyan); text-align: right; }
 .bctrl dd { margin: 0; color: #e8eef6; }
 
+/* results */
+.results { min-width: calc(var(--gp) * 190); }
+.res { margin: 0 0 calc(var(--gp) * 5); padding: 0; list-style: none; display: grid; gap: calc(var(--gp) * 1.2); }
+.res li { display: grid; grid-template-columns: calc(var(--gp) * 12) calc(var(--gp) * 40) 1fr auto; align-items: center; gap: calc(var(--gp) * 3); padding: calc(var(--gp) * 1.2) calc(var(--gp) * 4); font: 600 calc(var(--gp) * 7) / 1 var(--f-ui2); color: #dfe8f4; background: rgba(58, 140, 255, 0.12); border-radius: calc(var(--gp) * 2); }
+.res li span { color: var(--cyan); font-weight: 700; }
+.res li i { font-style: normal; color: #9ca5ad; }
+.res li em { font-style: normal; text-align: right; }
+.res li.me { background: rgba(58, 140, 255, 0.5); color: #fff; box-shadow: 0 0 calc(var(--gp) * 4) var(--glow); }
+.res-fans { margin: 0 0 calc(var(--gp) * 4); text-align: center; font: 700 calc(var(--gp) * 8) / 1 var(--f-ui2); color: #fff; }
+.res-fans .heart { font-style: normal; color: #ff5ab4; }
+.bpanel .menu.row { flex-direction: row; justify-content: center; gap: calc(var(--gp) * 4); }
+
 /* ---------- race HUD ---------- */
 .bhud { inset: 0; pointer-events: none; text-shadow: none; }
 .bp {
@@ -153,6 +165,7 @@
     box-shadow: 0 0 calc(var(--gp) * 8) var(--glow);
 }
 .rmsg.pop { animation: feed 1.6s steps(6) forwards; }
+.rmsg.big { top: calc(var(--gp) * 46); padding: calc(var(--gp) * 2) calc(var(--gp) * 16); font-size: calc(var(--gp) * 40); border-radius: calc(var(--gp) * 8); }
 .rmsg.bad { background: rgba(200, 30, 50, 0.75); box-shadow: 0 0 calc(var(--gp) * 8) rgba(255, 60, 80, 0.8); }
 .rwrong { position: absolute; left: 50%; top: calc(var(--gp) * 80); transform: translateX(-50%); margin: 0; padding: calc(var(--gp) * 2) calc(var(--gp) * 8); font: 700 calc(var(--gp) * 11) / 1 var(--f-ui2); color: #fff; background: rgba(200, 30, 50, 0.8); border-radius: calc(var(--gp) * 3); animation: blink 0.6s steps(1) infinite; }
 body[data-view="cockpit"] .b-slots { bottom: calc(var(--gp) * 62); }
