@@ -1502,7 +1502,7 @@ export class Roam {
         x.clearRect(0, 0, 64, 64);
         x.drawImage(this.w.mapC, Math.round(cx) - 32, Math.round(cy) - 32, 64, 64, 0, 0, 64, 64);
         const dot = (wx, wz, col, s = 3) => { const [px, py] = M(wx, wz), X = Math.round(px - cx + 32), Yy = Math.round(py - cy + 32); if (X < -2 || Yy < -2 || X > 66 || Yy > 66) return; x.fillStyle = '#04070f'; x.fillRect(X - (s >> 1) - 1, Yy - (s >> 1) - 1, s + 2, s + 2); x.fillStyle = col; x.fillRect(X - (s >> 1), Yy - (s >> 1), s, s); };
-        for (const tr of this.w.trains) tr.cars.forEach(({ ob }) => dot(ob.x, ob.z, '#8a7a6a', 2));
+        for (const tr of this.w.trains) if (tr.head) tr.cars.forEach(({ ob }) => dot(ob.x, ob.z, '#8a7a6a', 2));
         for (const c of cars) if (c !== car) dot(c.x, c.z, c.npc && c.npc.kind === 'rival' ? '#ff3a6e' : '#6a7480', 2);
         if (!this.ch) for (const mk of this.markers) dot(mk.x, mk.z, this.save.won[mk.c.id] ? '#ffd27a' : '#3ad0ff', 4);
         else this.ch.gates.slice(this.ch.next, this.ch.next + 1).forEach((g) => dot(g.x, g.z, '#ffe23a', 4));
@@ -1548,7 +1548,7 @@ export class Roam {
         W.traps.forEach((t) => mark(t.x, t.z, s.traps[t.id] ? '#ff5ab4' : '#7a3a5a', 'sq', s.traps[t.id] ? this.api.speedTxt(s.traps[t.id] / 3.6) : ''));
         this.markers.forEach((mk) => mark(mk.x, mk.z, s.won[mk.c.id] ? '#ffd27a' : '#3ad0ff', 'dia', s.won[mk.c.id] ? '' : RIVALS[mk.c.rival].name));
         W.ducks.forEach((d) => { if (s.ducks.includes(d.id)) { const [px, py] = M(d.x, d.z); x.fillStyle = '#04070f'; x.fillRect(px - 3, py - 3, 6, 6); x.fillStyle = '#ffcc33'; x.fillRect(px - 2, py - 2, 4, 4); } });
-        for (const tr of W.trains) { const [px, py] = M(tr.head.x, tr.head.z); x.fillStyle = '#c8ccd4'; x.fillRect(px - 2, py - 2, 4, 4); }
+        for (const tr of W.trains) { if (!tr.head) continue; const [px, py] = M(tr.head.x, tr.head.z); x.fillStyle = '#c8ccd4'; x.fillRect(px - 2, py - 2, 4, 4); }
         // you: an arrow
         const [px, py] = M(car.x, car.z);
         x.save(); x.translate(px, py); x.rotate(Math.atan2(-Math.cos(car.h), -Math.sin(car.h)));

@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230b1530'/%3E%3Crect x='3' y='5' width='10' height='5' fill='%235b46d8'/%3E%3Crect x='5' y='3' width='6' height='3' fill='%239fd8f5'/%3E%3Crect x='3' y='10' width='3' height='3' fill='%23111'/%3E%3Crect x='10' y='10' width='3' height='3' fill='%23111'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Permanent+Marker&family=Pixelify+Sans:wght@400;500;600;700&family=Sedgwick+Ave+Display&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Black+Ops+One&family=Permanent+Marker&family=Pixelify+Sans:wght@400;500;600;700&family=Sedgwick+Ave+Display&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/rally.css">
 <script type="importmap">
@@ -171,6 +171,7 @@
                         <button type="button" data-cycle="fps">Frames &#9664;<b>30 FPS</b>&#9654;</button>
                         <button type="button" data-cycle="wobble">Wobble &#9664;<b>ON</b>&#9654;</button>
                         <button type="button" data-cycle="diff">Rivals &#9664;<b>NORMAL</b>&#9654;</button>
+                        <button type="button" data-cycle="codriver">Co-driver &#9664;<b>VOICE</b>&#9654;</button>
                         <button type="button" data-cycle="units">Speed in &#9664;<b>KM/H</b>&#9654;</button>
                         <button type="button" data-cycle="sound">Sound <b>ON</b></button>
                         <button type="button" data-cycle="music">Music <b>ON</b></button>
@@ -187,12 +188,12 @@
                         <dt>Z</dt><dd>fire power-up forward</dd>
                         <dt>X</dt><dd>fire power-up backward</dd>
                         <dt>C</dt><dd>switch power-up slot</dd>
-                        <dt>V</dt><dd>cockpit / chase camera</dd>
+                        <dt>V</dt><dd>change camera</dd>
                         <dt>R</dt><dd>back on the road</dd>
                         <dt>P / F</dt><dd>pause / full screen</dd>
-                        <dt>ENTER</dt><dd>free roam: start a rival sprint</dd>
-                        <dt>T / Y</dt><dd>free roam: fast time / next weather</dd>
-                        <dt>M</dt><dd>free roam: world map &amp; fast travel</dd>
+                        <dt>ENTER</dt><dd>roam: race a rival</dd>
+                        <dt>T / Y</dt><dd>roam: time / weather</dd>
+                        <dt>M</dt><dd>roam: map &amp; fast travel</dd>
                         <dt>H</dt><dd>photo mode</dd>
                         <dt>N</dt><dd>next radio station</dd>
                     </dl>
@@ -213,9 +214,30 @@
                     <div class="b-rev" id="h-rev" hidden><canvas id="h-revc" width="88" height="64"></canvas><small id="h-revt">LAUNCH</small></div>
                     <p class="rmsg" id="h-msg" hidden></p>
                     <p class="rwrong" id="h-wrong" hidden>WRONG WAY</p>
+                    <div class="b-notes" id="h-notes" hidden></div>
                     <div class="b-drift" id="h-drift" hidden><small>DRIFT</small><b id="h-drift-n">0</b><em id="h-drift-x">×1</em><i></i></div>
                 </div>
 
+                <div class="intro" id="intro" hidden>
+                    <i class="lb top"></i><i class="lb bot"></i>
+                    <p class="in-round" id="in-round">race</p>
+                    <h2 class="in-name" id="in-name">TRACK</h2>
+                    <p class="in-blurb" id="in-blurb"></p>
+                    <p class="in-meta" id="in-meta"></p>
+                    <p class="in-skip"><kbd>&#8629;</kbd> skip</p>
+                </div>
+                <div class="replay" id="replay" hidden>
+                    <i class="lb top"></i><i class="lb bot"></i>
+                    <p class="rp-tag"><i></i>REPLAY</p>
+                    <p class="rp-name" id="rp-name"></p>
+                    <p class="rp-car" id="rp-car"></p>
+                    <div class="rp-foot">
+                        <span id="rp-speed">×1</span>
+                        <i class="rp-bar" id="rp-bar"></i>
+                        <span id="rp-time"></span>
+                    </div>
+                    <p class="rp-keys">&larr;&rarr; seek &middot; &uarr;&darr; speed &middot; SPACE pause &middot; C next car &middot; &#8629; exit</p>
+                </div>
                 <p class="btoast" id="toast" hidden></p>
                 <p class="photo-hint" id="photo-hint" hidden>PHOTO MODE &middot; &larr;&rarr;&uarr;&darr; orbit &middot; SHIFT + &uarr;&darr; zoom &middot; H exit</p>
                 <div class="ov bpanel trophies" id="trophies" hidden>

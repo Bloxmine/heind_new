@@ -12,6 +12,7 @@ import { PU, Pickups, Weapons, iconURL } from './powerups.js';
 import { Driver, RIVALS, plan } from './ai.js';
 import { Music, SONGS } from './music.js';
 import { buildWorld, Roam } from './world.js';
+import { paceNotes, noteIcon, CoDriver } from './pacenotes.js';
 
 const $ = (q, r = document) => r.querySelector(q);
 const $$ = (q, r = document) => [...r.querySelectorAll(q)];
@@ -35,6 +36,8 @@ if (!CFG.ach) CFG.ach = {};
 const ST = CFG.stats;
 for (const k of ['races', 'km', 'top', 'drift', 'jump', 'near', 'smash', 'takedown', 'perfect', 'painted', 'ghost', 'drifts']) if (ST[k] == null) ST[k] = 0;
 if (!['kmh', 'mph'].includes(CFG.units)) CFG.units = 'kmh';
+const CODRIVER = ['voice', 'notes', 'off'];
+if (!CODRIVER.includes(CFG.codriver)) CFG.codriver = 'voice';
 const VIEWS = ['chase', 'far', 'hood', 'cockpit'], VIEWN = { chase: 'CHASE', far: 'FAR CHASE', hood: 'HOOD', cockpit: 'COCKPIT' };
 if (!VIEWS.includes(CFG.view)) CFG.view = 'chase';
 const speedTxt = (ms) => CFG.units === 'mph' ? `${Math.round(ms * 2.237)} mph` : `${Math.round(ms * 3.6)} km/h`;
@@ -547,10 +550,15 @@ function startDrive(kind = race ? race.kind : 'race') {
     best = store.get(bestKey(), null);
     rec = []; recAcc = 0;
     loadGhost(kind === 'trial');
+    // a fly-through of the track before races and time trials
+    notes = kind === 'trial' && CFG.codriver !== 'off' ? paceNotes(track) : null;
+    $('#h-notes').hidden = true;
+    tape = { frames: [], acc: 0, n: 0 };
+    if (kind === 'race' || kind === 'trial') startIntro(kind);
     $('#h-feed').innerHTML = '';
     chase(0, true);
     if (cup) feed(`${cup.name} · race ${cup.idx + 1}/${cup.tracks.length}`, 0);
-    if (kind === 'trial') { message('TIME TRIAL', 1.6); audio.beep(880, 0.25); }
+    if (kind === 'trial') { if (!race.intro) { message('TIME TRIAL', 1.6); audio.beep(880, 0.25); } }
     else if (kind === 'roam') { feed('Find the golden ducks · race the rivals in the light', 0); audio.beep(880, 0.25); }
     else if (kind !== 'race') { message('GO!', 1.2); audio.beep(880, 0.25); }
 }
@@ -602,6 +610,10 @@ const roamApi = {
     env: { sun, hemi, scene, sunDisc, sunDir }
 };
 function toMenu(sub) {
+    replay = null;
+    codriver.stop(); notes = null; $('#h-notes').hidden = true;
+    if (race && race.intro > 0) endIntro();
+    $('#intro').hidden = true; document.body.dataset.intro = '';
     if (photo) setPhoto(false);
     if (mapOpen) setMap(false);
     $('#h-drift').hidden = true; endDrift(false);
@@ -694,6 +706,7 @@ function bankFans() {
     return CARS.filter((s) => s.unlock && before < s.unlock && CFG.fansTotal >= s.unlock);
 }
 function showResults() {
+    race.showed = true;
     music.want(STATIONS[CFG.radio][0] || 'results');
     ST.races++;
     setTimeout(checkAch, 400);
@@ -706,7 +719,7 @@ function showResults() {
         const time = c.done ? (c === win ? fmt(c.finishT) : '+' + (c.finishT - win.finishT).toFixed(2)) : 'racing';
         return `<li class="${c === car ? 'me' : ''}"><span>${i + 1}</span><b>${nameOf(c)}</b><i>${c.spec.name}</i><em>${time}</em></li>`;
     }).join('');
-    let extra = '', buttons = [['restart', 'Race again'], ['next', 'Next track'], ['quit', 'Menu']];
+    let extra = '', buttons = [['restart', 'Race again'], ['replay', 'Replay'], ['next', 'Next track'], ['quit', 'Menu']];
     if (cup) {
         order.forEach((c, i) => { cup.points[nameOf(c)] = (cup.points[nameOf(c)] || 0) + CUP_POINTS[i]; });
         const table = Object.entries(cup.points).sort((a, b) => b[1] - a[1]);
@@ -718,8 +731,8 @@ function showResults() {
             if (bonus) { fans += bonus; extra += `<p class="unlock">${['Gold', 'Silver', 'Bronze'][mine - 1]} trophy! <b>+${bonus}</b> fans</p>`; }
             const prev = CFG.trophies[cup.id] || 9;
             if (mine < prev) CFG.trophies[cup.id] = mine;
-            buttons = [['cupdone', 'Finish cup']];
-        } else buttons = [['cupnext', 'Next race'], ['quit', 'Quit cup']];
+            buttons = [['cupdone', 'Finish cup'], ['replay', 'Replay']];
+        } else buttons = [['cupnext', 'Next race'], ['replay', 'Replay'], ['quit', 'Quit cup']];
     }
     const newly = bankFans();
     extra += newly.map((s) => `<p class="unlock">New car unlocked: <b>${s.name}</b></p>`).join('');
@@ -834,6 +847,12 @@ function carFx(c) {
 }
 const HOLD = { steer: 0, throttle: 0, brake: 1, handbrake: false };
 function updDrive(dt) {
+    if (race && race.intro > 0) {
+        race.intro -= dt; race.introT += dt;
+        for (const c of cars) { c.vx = c.vz = 0; c.w = 0; }
+        if (race.intro <= 0) endIntro();
+        return;
+    }
     if (race && race.count > 0) {
         const thr = readDrive().throttle > 0;
         if (thr && race.rev == null) race.rev = race.count;
@@ -872,6 +891,10 @@ function updDrive(dt) {
     if (car.scrape > 0.6 && !car.scrapeSnd) { audio.thud(car.scrape); car.scrapeSnd = true; }
     if (car.scrape < 0.1) car.scrapeSnd = false;
     if (!(race && race.count > 0) && !car.done) driving(dt);
+    if (race && (race.kind === 'race' || race.kind === 'trial') && race.count <= 0 && !race.showed && tape.frames.length < 9000) {
+        tape.acc += dt;
+        while (tape.acc >= 0.1) { tape.acc -= 0.1; recordFrame(); }
+    }
     if (car.land > 0.5 && !car.landSnd) { audio.thud(car.land); car.landSnd = true; burst = Math.max(burst, car.land); }
     if (car.land < 0.1) car.landSnd = false;
 }
@@ -1029,6 +1052,192 @@ $('#wmap-c').addEventListener('click', (e) => {
     else message('NOT DURING A SPRINT', 1.4, true);
 });
 
+/* ---------- race intro: three camera shots, then the countdown ---------- */
+/* ---------- replays: a tape of every car, played back by a camera director ---------- */
+let tape = { frames: [], acc: 0, n: 0 }, replay = null;
+const RW = 9;
+function recordFrame() {
+    const f = new Float32Array(cars.length * RW);
+    cars.forEach((c, k) => {
+        const o = k * RW;
+        f[o] = c.x; f[o + 1] = c.y; f[o + 2] = c.z; f[o + 3] = c.h; f[o + 4] = c.pitch; f[o + 5] = c.roll + c.flip;
+        f[o + 6] = c.nitro > 0 ? 1 : 0; f[o + 7] = c.braking ? 1 : 0; f[o + 8] = c.speed;
+    });
+    tape.frames.push(f); tape.n = cars.length;
+}
+function startReplay() {
+    if (tape.frames.length < 20 || tape.n !== cars.length) { message('NO REPLAY', 1.2, true); return; }
+    replay = {
+        t: 0, speed: 1, playing: true, focus: Math.max(0, cars.indexOf(car)), shot: null, shotN: 0, len: (tape.frames.length - 1) * 0.1,
+        save: cars.map((c) => ({ x: c.x, y: c.y, z: c.z, h: c.h, vx: c.vx, vz: c.vz, vy: c.vy, w: c.w, pitch: c.pitch, roll: c.roll, flip: c.flip, q: c.q, hint: c.hint, lastGy: c.lastGy, nitro: c.nitro }))
+    };
+    mode = 'replay'; document.body.dataset.mode = 'replay';
+    show('results', false); show('hud', false); setMenu(null);
+    $('#replay').hidden = false;
+    $('#rp-name').textContent = trackById(CFG.track).name;
+    cockpit.setVisible(false);
+    audio.beep(880, 0.08);
+    poseReplay(0);
+    replay.shot = nextShot();
+}
+function exitReplay() {
+    if (!replay) return;
+    cars.forEach((c, k) => Object.assign(c, replay.save[k]));
+    cars.forEach((c) => c.sync(0));
+    replay = null;
+    mode = 'drive'; document.body.dataset.mode = 'drive';
+    $('#replay').hidden = true;
+    show('results', true); setMenu($('#res-menu'));
+    cockpit.setVisible(CFG.view === 'cockpit');
+}
+function poseReplay(dt) {
+    const F = tape.frames, f = Math.min(replay.t / 0.1, F.length - 1.001), i = Math.floor(f), k = f - i, A = F[i], B = F[Math.min(i + 1, F.length - 1)];
+    cars.forEach((c, n) => {
+        const o = n * RW, L = (j) => A[o + j] + (B[o + j] - A[o + j]) * k;
+        c.x = L(0); c.y = L(1); c.z = L(2);
+        c.h = A[o + 3] + angDiff(B[o + 3], A[o + 3]) * k;
+        c.pitch = L(4); c.roll = L(5); c.flip = 0;
+        c.nitro = A[o + 6] > 0.5 ? 0.3 : 0; c.braking = A[o + 7] > 0.5;
+        c.speed = L(8); c.vf = c.speed; c.vx = Math.sin(c.h) * c.speed; c.vz = Math.cos(c.h) * c.speed; c.slip = 0;
+        c.invuln = 0; c.ground = true; c.wrecked = 0; c.shield = 0;
+        c.q = track.query(c.x, c.z, c.q ? c.q.i : null);
+        c.wheelSpin += c.speed * dt / c.mesh.B.wheelR;
+        c.sync(0);
+        if (dt > 0) carFx(c);
+    });
+}
+// the director: mostly long-lens trackside cameras that pan as the car goes by, cut with helicopter,
+// low chase, tracking and head-on shots
+const SHOTS = ['track', 'track', 'heli', 'track', 'low', 'track', 'side', 'track', 'front'];
+function nextShot() {
+    const c = cars[replay.focus], S = track.S, N = track.N, kind = SHOTS[replay.shotN++ % SHOTS.length];
+    if (kind === 'track') {
+        const j = (c.q.i + 40 + ((Math.random() * 30) | 0)) % N, s = S[j], side = Math.random() < 0.5 ? 1 : -1, off = s.w / 2 + 5 + Math.random() * 9;
+        const x = s.x + s.sx * off * side, z = s.z + s.sz * off * side;
+        return { kind, x, z, y: Math.max(s.y + 1.2 + Math.random() * 4, track.query(x, z, j).y + 0.8), j, t: 0, max: 9 };
+    }
+    return { kind, t: 0, max: kind === 'heli' ? 5 : 4, side: Math.random() < 0.5 ? 1 : -1 };
+}
+function replayCam(dt) {
+    const c = cars[replay.focus], fx = Math.sin(c.h), fz = Math.cos(c.h), rx = -fz, rz = fx, N = track.N;
+    let sh = replay.shot;
+    sh.t += dt * replay.speed;
+    if (sh.kind === 'track') {
+        const past = ((c.q.i - sh.j) % N + N) % N, d = Math.hypot(sh.x - c.x, sh.z - c.z);
+        if ((past > 14 && past < N / 2) || sh.t > sh.max || d > 170) sh = replay.shot = nextShot();
+    } else if (sh.t > sh.max) sh = replay.shot = nextShot();
+    let px, py, pz, look = [c.x, c.y + 0.8, c.z], fov = 48;
+    if (sh.kind === 'track') {
+        px = sh.x; py = sh.y; pz = sh.z;
+        const d = Math.hypot(px - c.x, py - c.y, pz - c.z);
+        fov = clamp(2 * Math.atan(4.5 / d) * 180 / Math.PI * 1.6, 7, 55);           // zoom to keep the car framed
+    } else if (sh.kind === 'heli') { px = c.x - fx * 18 + rx * sh.side * 14; pz = c.z - fz * 18 + rz * sh.side * 14; py = c.y + 22; fov = 40; }
+    else if (sh.kind === 'low') { px = c.x - fx * 4.6 + rx * sh.side * 1.3; pz = c.z - fz * 4.6 + rz * sh.side * 1.3; py = c.y + 0.6; look = [c.x + fx * 12, c.y + 0.9, c.z + fz * 12]; fov = 64; }
+    else if (sh.kind === 'side') { px = c.x + rx * sh.side * 6.5 + fx; pz = c.z + rz * sh.side * 6.5 + fz; py = c.y + 1.1; fov = 46; }
+    else { px = c.x + fx * 9 + rx * sh.side * 2; pz = c.z + fz * 9 + rz * sh.side * 2; py = c.y + 1; fov = 44; }
+    if (sh.kind !== 'track') py = Math.max(py, track.query(px, pz, c.q.i).y + 0.5);
+    cam.position.set(px, py, pz);
+    cam.lookAt(look[0], look[1], look[2]);
+    cam.fov = fov; cam.clearViewOffset(); cam.updateProjectionMatrix();
+}
+const RSPEEDS = [0.25, 0.5, 1, 2, 4];
+function updReplay(dt) {
+    const r = replay;
+    if (press('ok') || press('back') || press('pause')) { exitReplay(); return; }
+    if (press('hand')) r.playing = !r.playing;
+    if (press('mup')) r.speed = RSPEEDS[Math.min(RSPEEDS.length - 1, RSPEEDS.indexOf(r.speed) + 1)];
+    if (press('mdown')) r.speed = RSPEEDS[Math.max(0, RSPEEDS.indexOf(r.speed) - 1)];
+    if (press('cycle')) { r.focus = (r.focus + 1) % cars.length; r.shot = nextShot(); }
+    const seek = (keys.has('right') ? 1 : 0) - (keys.has('left') ? 1 : 0);
+    let step = r.playing ? dt * r.speed : 0;
+    if (seek) { step = seek * dt * 8; }
+    r.t = clamp(r.t + step, 0, r.len);
+    if (r.t >= r.len && !seek) { r.t = 0; r.shot = nextShot(); }          // loop
+    poseReplay(Math.abs(step));
+    replayCam(dt);
+    const c = cars[r.focus], pos = race.order.indexOf(c);
+    setText('rp-car', `${nameOf(c)} · ${c.spec.name}${pos >= 0 ? ` · P${pos + 1}` : ''}`);
+    setText('rp-time', `${fmt(r.t)} / ${fmt(r.len)}`);
+    setText('rp-speed', r.playing ? `×${r.speed}` : 'PAUSED');
+    $('#rp-bar').style.setProperty('--p', (r.t / r.len).toFixed(4));
+}
+
+const SHOT = 2.3;
+function startIntro(kind) {
+    race.intro = SHOT * 3; race.introT = 0;
+    cockpit.setVisible(false);
+    const t = trackById(CFG.track);
+    $('#in-round').textContent = cup ? `${cup.name} · race ${cup.idx + 1}/${cup.tracks.length}` : kind === 'trial' ? 'time trial' : 'race';
+    $('#in-name').textContent = t.name;
+    $('#in-blurb').textContent = title(t.blurb);
+    $('#in-meta').textContent = `${kind === 'trial' ? 'beat your ghost' : `${race.laps} laps · 8 cars`} · ${title(track.def.rain ? 'rain' : track.def.snowfall ? (t.weather === 'snow' || CFG.weather === 'snow' ? 'snow' : t.weather) : 'dry')}`;
+    const el = $('#intro'); el.hidden = false; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
+    document.body.dataset.intro = '1';
+    introCam(0);
+}
+function endIntro() {
+    if (!race || !race.intro && $('#intro').hidden) return;
+    race.intro = 0;
+    $('#intro').hidden = true;
+    document.body.dataset.intro = '';
+    cockpit.setVisible(CFG.view === 'cockpit');
+    chase(0, true);
+    if (race.kind === 'trial') { message('TIME TRIAL', 1.6); audio.beep(880, 0.25); }
+}
+function introCam(t) {
+    const S = track.S, N = track.N, at = (i) => S[((Math.round(i) % N) + N) % N];
+    const shot = Math.min(2, Math.floor(t / SHOT)), u = Math.min(1, (t - shot * SHOT) / SHOT), e = u * u * (3 - 2 * u);
+    let px, py, pz, look;
+    if (shot === 0) {
+        // a high crane shot sweeping along the far side of the track
+        const i = N * 0.3 + e * 40, s = at(i);
+        px = s.x + s.sx * 24; pz = s.z + s.sz * 24; py = s.y + 28 - e * 12;
+        const l = at(i + 30); look = [l.x, l.y, l.z];
+    } else if (shot === 1) {
+        // low by the roadside, panning as the road unwinds past the lens
+        const s = at(N * 0.62), side = s.w / 2 + 3;
+        px = s.x - s.sx * side; pz = s.z - s.sz * side; py = s.y + 1.4;
+        const l = at(N * 0.62 - 35 + e * 70); look = [l.x, l.y + 1, l.z];
+    } else {
+        // swing round the grid and settle in behind your car
+        const a = car.h + 0.4 + e * (Math.PI - 0.4), r = 16 - e * 9.4;
+        px = car.x + Math.sin(a) * r; pz = car.z + Math.cos(a) * r; py = car.y + 7 - e * 4.4;
+        const f = e * 4; look = [car.x + Math.sin(car.h) * f, car.y + 1.1, car.z + Math.cos(car.h) * f];
+    }
+    const g = track.query(px, pz, shot === 2 ? car.q.i : null).y;
+    py = Math.max(py, g + 1.2);
+    cam.position.set(px, py, pz);
+    cam.lookAt(look[0], look[1], look[2]);
+    cam.fov = 52; cam.clearViewOffset(); cam.updateProjectionMatrix();
+    camH = car.h; camY = car.y + 2.6;
+}
+
+/* ---------- pace notes in the time trial ---------- */
+let notes = null, notesHTML = '';
+const codriver = new CoDriver();
+function updNotes() {
+    const el = $('#h-notes');
+    if (!lapStarted && race.kind === 'trial' && car.speed < 1 && !race.intro) { /* still show the first calls on the line */ }
+    if (race.intro > 0) { el.hidden = true; return; }
+    const N = track.N, seg = track.seg || 2, p = car.q.prog;
+    const ahead = notes.map((o) => ({ o, d: (((o.i - p) % N) + N) % N * seg })).filter((a) => a.d < 380).sort((a, b) => a.d - b.d).slice(0, 3);
+    for (const { o, d } of ahead) {
+        const callAt = Math.max(70, car.speed * 3.4);
+        if (!o.called && d < callAt) {
+            o.called = true;
+            if (CFG.codriver === 'voice' && CFG.sound && !o.silent) {
+                let text = o.say;
+                if (o.into) { const nx = notes[(o.id + 1) % notes.length]; text += ` into ${nx.say}`; nx.silent = true; }
+                codriver.say(text);
+            }
+        }
+    }
+    for (const o of notes) { const d = (((o.i - p) % N) + N) % N * seg; if (d > 420) { o.called = false; o.silent = false; } }
+    el.hidden = !ahead.length;
+    const html = ahead.map(({ o, d }, n) => `<div class="pn${n ? '' : ' next'}"><img src="${noteIcon(o)}" alt=""><b>${o.text}</b><small>${o.into && n === 0 ? 'into · ' : ''}${Math.round(d / 10) * 10} m</small></div>`).join('');
+    if (html !== notesHTML) { notesHTML = html; el.innerHTML = html; }
+}
+
 function engineSound() {
     if (!car) return;
     const inp = mode === 'drive' && !paused ? readDrive() : { throttle: 0 };
@@ -1061,7 +1270,23 @@ function cardIcon(kind) {
     if (kind === 'trial') { circle(24, 27, 16); x.fillRect(21, 5, 6, 6); x.fillStyle = '#0a1830'; circle(24, 27, 12); x.fillStyle = '#9ff0ff'; x.fillRect(23, 17, 2, 11); x.fillRect(23, 26, 8, 2); }
     if (kind === 'world') { circle(24, 24, 18); x.fillStyle = '#0a1830'; circle(24, 24, 15); x.fillStyle = '#9ff0ff'; x.beginPath(); x.moveTo(12, 14); x.lineTo(22, 12); x.lineTo(26, 20); x.lineTo(18, 26); x.lineTo(20, 34); x.lineTo(13, 30); x.fill(); x.beginPath(); x.moveTo(28, 28); x.lineTo(36, 24); x.lineTo(37, 34); x.lineTo(30, 37); x.fill(); }
     if (kind === 'home') { x.beginPath(); x.moveTo(24, 6); x.lineTo(44, 24); x.lineTo(4, 24); x.fill(); x.fillRect(10, 24, 28, 18); x.fillStyle = '#0a1830'; x.fillRect(20, 30, 8, 12); }
-    return (iconCache[kind] = c.toDataURL());
+    return (iconCache[kind] = inkify(c));
+}
+// recolour a menu icon for the comic look: cyan becomes paper, navy becomes ink, and an ink outline goes round it
+function inkify(src) {
+    const w = src.width, h = src.height, sx = src.getContext('2d'), img = sx.getImageData(0, 0, w, h), d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 40) continue;
+        const dark = d[i] + d[i + 1] + d[i + 2] < 200;
+        d[i] = dark ? 13 : 255; d[i + 1] = dark ? 13 : 246; d[i + 2] = dark ? 18 : 224;
+    }
+    sx.putImageData(img, 0, 0);
+    const out = document.createElement('canvas'); out.width = w + 6; out.height = h + 6;
+    const o = out.getContext('2d'), sil = document.createElement('canvas'); sil.width = w; sil.height = h;
+    const s2 = sil.getContext('2d'); s2.drawImage(src, 0, 0); s2.globalCompositeOperation = 'source-in'; s2.fillStyle = '#0d0d12'; s2.fillRect(0, 0, w, h);
+    for (const [dx, dy] of [[-2, 0], [2, 0], [0, -2], [0, 2], [-2, -2], [2, 2], [-2, 2], [2, -2], [3, 3]]) o.drawImage(sil, 3 + dx, 3 + dy);
+    o.drawImage(src, 3, 3);
+    return out.toDataURL();
 }
 const MAIN_CARDS = [
     { label: 'race', icon: 'race', desc: 'Eight cars, three laps, every power-up', act: () => { cup = null; startDrive('race'); } },
@@ -1099,10 +1324,14 @@ function thumb(t) {
     pts.forEach((p) => { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); z0 = Math.min(z0, p.z); z1 = Math.max(z1, p.z); });
     const c = document.createElement('canvas'); c.width = c.height = 48;
     const x = c.getContext('2d'), sc = 36 / Math.max(x1 - x0, z1 - z0);
-    x.strokeStyle = '#9ff0ff'; x.lineWidth = 3.5; x.lineJoin = 'round';
-    x.beginPath();
-    pts.forEach((p, i) => { const px = 42 - ((p.x - x0) * sc + (36 - (x1 - x0) * sc) / 2), py = 42 - ((p.z - z0) * sc + (36 - (z1 - z0) * sc) / 2); i ? x.lineTo(px, py) : x.moveTo(px, py); });
-    x.stroke();
+    x.lineJoin = 'round';
+    const P = (p) => [42 - ((p.x - x0) * sc + (36 - (x1 - x0) * sc) / 2), 42 - ((p.z - z0) * sc + (36 - (z1 - z0) * sc) / 2)];
+    for (const [w, col, dx] of [[7, '#0d0d12', 1.5], [7, '#0d0d12', 0], [3.5, '#fff6e0', 0]]) {
+        x.strokeStyle = col; x.lineWidth = w; x.beginPath();
+        pts.forEach((p, i) => { const [px, py] = P(p); i ? x.lineTo(px + dx, py + dx) : x.moveTo(px + dx, py + dx); });
+        x.stroke();
+    }
+    const [sx0, sy0] = P(pts[0]); x.fillStyle = '#0d0d12'; x.fillRect(sx0 - 3.5, sy0 - 3.5, 7, 7); x.fillStyle = '#ff3d3d'; x.fillRect(sx0 - 2, sy0 - 2, 4, 4);
     return (thumbs[t.id] = c.toDataURL());
 }
 // browsing the track list rebuilds the world behind the menu, after a short pause so
@@ -1267,7 +1496,7 @@ function menuInput() {
     if (press('ok')) b.click();
 }
 const show = (id, on = true) => { const el = $('#' + id); if (el) el.hidden = !on; };
-const hideAll = () => ['title', 'hud', 'pause', 'garage', 'opts', 'ctrls', 'results', 'trophies', 'wmap'].forEach((id) => show(id, false));
+const hideAll = () => ['title', 'hud', 'pause', 'garage', 'opts', 'ctrls', 'results', 'trophies', 'wmap', 'replay'].forEach((id) => show(id, false));
 
 function cycle(what, dir) {
     if (what.startsWith('c-')) { customCycle(what.slice(2), dir); audio.beep(660, 0.05); return; }
@@ -1281,6 +1510,7 @@ function cycle(what, dir) {
     if (what === 'ink') CFG.ink = !CFG.ink;
     if (what === 'glow') CFG.glow = !CFG.glow;
     if (what === 'view') { CFG.view = VIEWS[(VIEWS.indexOf(CFG.view) + (dir > 0 ? 1 : VIEWS.length - 1)) % VIEWS.length]; if (cockpit) cockpit.setVisible(mode === 'drive' && CFG.view === 'cockpit'); if (mode === 'drive') message(VIEWN[CFG.view], 0.8); }
+    if (what === 'codriver') CFG.codriver = CODRIVER[(CODRIVER.indexOf(CFG.codriver) + 1) % CODRIVER.length];
     if (what === 'units') CFG.units = CFG.units === 'kmh' ? 'mph' : 'kmh';
     if (what === 'diff') { const k = Object.keys(DIFFS); CFG.diff = k[(k.indexOf(CFG.diff) + (dir > 0 ? 1 : k.length - 1)) % k.length]; }
     if (what === 'music') { CFG.music = !CFG.music; music.setOn(CFG.music); }
@@ -1296,6 +1526,7 @@ function syncOptions() {
     set('lines', CFG.lines ? 'ON' : 'OFF');
     set('view', VIEWN[CFG.view]);
     set('units', CFG.units === 'mph' ? 'MPH' : 'KM/H');
+    set('codriver', { voice: 'VOICE', notes: 'ARROWS', off: 'OFF' }[CFG.codriver]);
     set('radio', STATIONS[CFG.radio][1].split(' · ')[0]);
     $('.b-speed small').textContent = CFG.units === 'mph' ? 'mph' : 'km/h';
     set('weather', CFG.weather === 'auto' ? 'TRACK' : CFG.weather.toUpperCase());
@@ -1341,6 +1572,7 @@ const ACTS = {
     restart: () => { paused = false; show('pause', false); show('results', false); startDrive(); },
     quit: () => toMenu(),
     cupnext: () => { cup.idx++; cupRace(); },
+    replay: () => startReplay(),
     cupdone: () => toMenu('cups'),
     custom: () => { if (mode === 'garage') setCustom(true); },
     cdone: () => setCustom(false),
@@ -1459,6 +1691,7 @@ function frame(now) {
         music.want(song || (SONGS[track.def.id] ? track.def.id : SONG_FOR[track.def.id] || 'race1'));
         toast(`♪ ${name}`); syncOptions();
     }
+    if (mode === 'drive' && !paused && race && race.intro > 0 && (press('ok') || hits.has('fire'))) { hits.delete('fire'); hits.delete('ok'); endIntro(); }
     const roamIn = { ok: hits.has('ok'), fastTime: keys.has('time'), nextWeather: press('weather') };
     if (mode === 'drive' && !paused && !(race && race.count > 0) && !car.done) {
         if (press('cycle') && car.slots.length > 1) { car.sel = (car.sel + 1) % car.slots.length; audio.beep(760, 0.04); }
@@ -1475,15 +1708,19 @@ function frame(now) {
             acc += dt;
             while (acc >= STEP) { updDrive(STEP); acc -= STEP; }
             cars.forEach((c) => { c.sync(dt); if (!(c.npc && c.npc.far)) carFx(c); });
-            if (CFG.view === "hood") { car.mesh.root.visible = false; if (shadow) shadow.visible = false; } else if (shadow) shadow.visible = true;
+            if (CFG.view === "hood" && !(race && race.intro > 0)) { car.mesh.root.visible = false; if (shadow) shadow.visible = false; } else if (shadow) shadow.visible = true;
             if (roam) roam.frame(dt, roamIn);
             updGhost();
             if (pickups) pickups.update(dt, T, cars, cam, (c, type) => { if (c === car) { audio.fx('pickup'); feed(`${title(PU[type].name)}`, 0); } });
             weapons.update(dt, cars, T);
             if (!race || race.count <= 0) { const ctx = { track, cars, weapons, rank: rankCars, player: car, pickups }; for (const c of cars) if (c.driver && c !== car) c.driver.tactics(dt, ctx); }
             if (results > 0 && (results -= dt) <= 0) showResults();
-            if (CFG.view === 'cockpit') { cockpit.update(dt, track.def.rain); cockpit.place(cam); }
+            if (race && race.intro > 0) introCam(race.introT);
+            else if (CFG.view === 'cockpit') { cockpit.update(dt, track.def.rain); cockpit.place(cam); }
             else chase(dt);
+            if (notes) updNotes();
+        } else if (mode === 'replay' && replay) {
+            updReplay(dt);
         } else {
             car.sync(dt);
             if (mode === 'garage') orbit(T * 1.6, 6.2, 1.5, 0.17); else orbit(T, 14, 3.5, 0);
@@ -1535,7 +1772,7 @@ function frame(now) {
         const driving = mode === 'drive';
         if (driving) { if (cockpit.rt.width !== 96 * CFG.res) cockpit.rt.setSize(96 * CFG.res, 28 * CFG.res); cockpit.renderMirror(renderer, scene); }
         if (photo) photoCam(dt);
-        post.setInset(cockpit.rt.texture, driving && CFG.view !== 'cockpit' && !photo && !mapOpen);
+        post.setInset(cockpit.rt.texture, driving && CFG.view !== 'cockpit' && !photo && !mapOpen && !(race && race.intro > 0));
         post.render(scene, cam);
         if (driving) drawMinimap();
         const dashOn = driving && CFG.view === 'cockpit';
@@ -1585,7 +1822,7 @@ window.RALLY = {
     scene, cam, CFG, keys, hits, syncOptions, startDrive, toMenu, openGarage,
     set override(f) { override = f; }, get car() { return car; }, get cars() { return cars; }, get track() { return track; }, get mode() { return mode; },
     get rec() { return rec; }, get ghost() { return ghost; }, get lapStarted() { return lapStarted; },
-    get race() { return race; }, ST, checkAch, setMap, setPhoto, get drift() { return drift; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
+    get race() { return race; }, get tape() { return tape; }, get replay() { return replay; }, startReplay, ST, checkAch, setMap, setPhoto, get drift() { return drift; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
     set gIdx(v) { gIdx = v; garageShow(); }, rankCars: () => rankCars(), showResults: () => showResults(),
     startRoam: () => startRoam(), audio, music, get world() { return world; }, get roam() { return roam; },
     give: (type, c = car) => { c.slots.push({ type, ammo: PU[type].ammo || 1 }); }, get weapons() { return weapons; }
