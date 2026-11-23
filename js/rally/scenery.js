@@ -213,8 +213,9 @@ PROPS.towers = (ctx, o) => {
         const s = S[i], w = 14 + r() * 12, h = 30 + r() * (o.tall || 70);
         const b = beside(S, i, side, s.w / 2 + 10 + w / 2 + r() * 12);
         if (!clear(S, b.x, b.z, s.w / 2 + 8 + w / 2)) continue;
-        mats.push(place(b.x, s.y - 1, b.z, yaw(s) + (r() - 0.5) * 0.2, w, h, w * (0.7 + r() * 0.5)));
-        if (h > 60) tops.push([b.x, s.y + h, b.z]);
+        const y0 = o.fromGround ? ctx.def.groundY : s.y - 1, hh = h + (o.fromGround ? s.y - y0 : 0);
+        mats.push(place(b.x, y0, b.z, yaw(s) + (r() - 0.5) * 0.2, w, hh, w * (0.7 + r() * 0.5)));
+        if (h > 60) tops.push([b.x, y0 + hh, b.z]);
     }
     const tex = TX.windows.clone(); tex.repeat.set(1.5, 3); tex.needsUpdate = true;
     group.add(instanced(box, cel({ map: tex, emissive: '#ffffff', emissiveMap: tex }), mats));
@@ -370,6 +371,206 @@ PROPS.tower = (ctx, o) => {
     const beacon = glows(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshBasicMaterial({ color: '#ff3a3a', fog: false }))); beacon.position.y = 23.2; g.add(beacon);
     g.position.set(b.x, s.y - 0.3, b.z);
     group.add(g);
+};
+
+// --- theme park ---
+const stripes = (a, b, n = 8) => { const c = document.createElement('canvas'); c.width = 32; c.height = 8; const x = c.getContext('2d'); for (let i = 0; i < n; i++) { x.fillStyle = i % 2 ? b : a; x.fillRect(i * 32 / n, 0, 32 / n, 8); } const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; return t; };
+const RAINBOW = ['#ff3a6e', '#ffd23f', '#4aff7a', '#3ad0ff', '#b04aff', '#ff9a3a'];
+// a big wheel that turns, its gondolas hanging level, lights round the rim
+PROPS.ferris = (ctx, o) => {
+    const { S, group, anim } = ctx, i = o.at || 60, s = S[i], b = beside(S, i, o.side || 0, s.w / 2 + (o.dist || 34));
+    const R = o.r || 22, g = new THREE.Group(), wheel = new THREE.Group(), steel = cel({ color: '#e8e8e8' });
+    for (const sx of [-2, 2]) {
+        for (const lean of [-0.35, 0.35]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.8, R + 6, 0.8), steel); leg.position.set(sx, (R + 4) / 2, Math.sin(lean) * (R + 4) / 2); leg.rotation.x = -lean; g.add(leg); }
+    }
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(R, 0.45, 6, 32), steel); wheel.add(rim);
+    const rim2 = rim.clone(); rim2.position.x = 1.6; wheel.add(rim2);
+    const bulbs = [], cols = [];
+    for (let k = 0; k < 16; k++) {
+        const a = k / 16 * Math.PI * 2;
+        const sp = new THREE.Mesh(new THREE.BoxGeometry(0.25, R, 0.25), steel); sp.position.set(0.8, Math.cos(a) * R / 2, Math.sin(a) * R / 2); sp.rotation.x = a; wheel.add(sp);
+    }
+    for (let k = 0; k < 48; k++) { const a = k / 48 * Math.PI * 2; bulbs.push(place(-0.6, Math.cos(a) * R, Math.sin(a) * R)); cols.push(RAINBOW[k % RAINBOW.length]); }
+    wheel.add(glows(instanced(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false }), bulbs, cols)));
+    const pods = [];
+    for (let k = 0; k < 12; k++) {
+        const a = k / 12 * Math.PI * 2, piv = new THREE.Group();
+        piv.position.set(0.8, Math.cos(a) * R, Math.sin(a) * R);
+        const pod = new THREE.Mesh(new THREE.BoxGeometry(2.4, 2, 2.4), cel({ color: RAINBOW[k % RAINBOW.length] })); pod.position.y = -1.6; piv.add(pod);
+        wheel.add(piv); pods.push(piv);
+    }
+    wheel.position.y = R + 4; wheel.rotation.y = Math.PI / 2; g.add(wheel);
+    g.position.set(b.x, s.y - 0.3, b.z); g.rotation.y = yaw(s);
+    group.add(g);
+    anim.push((t) => { const a = t * 0.12; wheel.rotation.x = a; pods.forEach((p) => { p.rotation.x = -a; }); });
+};
+// a roller coaster: a loop of track up on stilts with a little train running round it
+PROPS.coaster = (ctx, o) => {
+    const { S, group, anim } = ctx, i = o.at || 120, s = S[i], c = beside(S, i, o.side || 1, s.w / 2 + (o.dist || 60));
+    const R = o.r || 38, pts = [];
+    for (let k = 0; k < 14; k++) {
+        const a = k / 14 * Math.PI * 2, rr = R * (0.75 + 0.25 * Math.sin(a * 3));
+        pts.push(new THREE.Vector3(c.x + Math.cos(a) * rr, s.y + [26, 20, 8, 14, 5, 18, 10, 24, 6, 12, 4, 16, 9, 22][k], c.z + Math.sin(a) * rr));
+    }
+    const curve = new THREE.CatmullRomCurve3(pts, true, 'centripetal');
+    const red = cel({ color: o.color || '#e8282a' }), white = cel({ color: '#e8e8e8' });
+    for (const off of [-0.7, 0.7]) {
+        const p2 = curve.getSpacedPoints(160).map((p, k, all) => { const n = all[(k + 1) % all.length], tx = n.x - p.x, tz = n.z - p.z, l = Math.hypot(tx, tz) || 1; return new THREE.Vector3(p.x - tz / l * off, p.y, p.z + tx / l * off); });
+        group.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(p2, true), 240, 0.18, 5, true), red));
+    }
+    const legs = [];
+    curve.getSpacedPoints(40).forEach((p) => { const h = p.y - s.y + 0.3; legs.push(place(p.x, s.y - 0.3, p.z, 0, 0.35, h, 0.35)); });
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, white, legs));
+    const cars = [];
+    for (let k = 0; k < 4; k++) { const m = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.1, 2.4), cel({ color: RAINBOW[k] })); group.add(m); cars.push(m); }
+    let u = 0, last = 0;
+    anim.push((t) => {
+        const dt = Math.min(0.1, t - last); last = t;
+        const p = curve.getPointAt(u), slope = curve.getTangentAt(u).y;
+        u = (u + dt * (0.03 - slope * 0.035) + 1) % 1;            // slow up the climbs, fast down the drops
+        cars.forEach((m, k) => {
+            const uu = (u - k * 0.012 + 1) % 1, pp = curve.getPointAt(uu), tt = curve.getTangentAt(uu);
+            m.position.set(pp.x, pp.y + 0.8, pp.z); m.lookAt(pp.x + tt.x, pp.y + 0.8 + tt.y, pp.z + tt.z);
+        });
+    });
+};
+// striped circus tents with a flag on top
+PROPS.tents = (ctx, o) => {
+    const { S, group } = ctx, r = rng(271), cols = [['#e8282a', '#f4f0e8'], ['#2a5aa8', '#ffd23f'], ['#b04aff', '#f4f0e8'], ['#2a8a4a', '#ffd23f']];
+    for (let n = 0, tries = 0; n < (o.count || 4) && tries < 200; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i], R = 8 + r() * 6;
+        const b = beside(S, i, side, s.w / 2 + R + 8 + r() * 10);
+        if (!clear(S, b.x, b.z, s.w / 2 + R + 4)) continue;
+        const [a, bb] = cols[n % cols.length], tex = stripes(a, bb, 12);
+        const g = new THREE.Group();
+        const wall = new THREE.Mesh(new THREE.CylinderGeometry(R, R, 5, 16, 1, true), cel({ map: tex, side: THREE.DoubleSide })); wall.position.y = 2.5; g.add(wall);
+        const roof = new THREE.Mesh(new THREE.ConeGeometry(R * 1.08, R * 0.9, 16), cel({ map: tex })); roof.position.y = 5 + R * 0.45; g.add(roof);
+        const flag = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 1), new THREE.MeshBasicMaterial({ color: '#ffd23f', side: THREE.DoubleSide })); flag.position.set(0.8, 5 + R * 0.9 + 1, 0); g.add(flag);
+        g.position.set(b.x, s.y - 0.2, b.z);
+        group.add(g); n++;
+    }
+};
+// a carousel that turns, horses bobbing, a ring of bulbs under the roof
+PROPS.carousel = (ctx, o) => {
+    const { S, group, anim } = ctx, i = o.at || 200, s = S[i], b = beside(S, i, o.side || 0, s.w / 2 + (o.dist || 18));
+    const g = new THREE.Group(), spin = new THREE.Group(), tex = stripes('#ff3a6e', '#fff4d8', 16);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(8, 8.4, 0.8, 18), cel({ color: '#c8a040' })); base.position.y = 0.4; g.add(base);
+    const roof = new THREE.Mesh(new THREE.ConeGeometry(9, 3.4, 18), cel({ map: tex })); roof.position.y = 7.2; spin.add(roof);
+    const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 0.8, 6, 8), cel({ color: '#ffd23f' })); pole.position.y = 3.5; spin.add(pole);
+    const horses = [], bulbs = [], cols = [];
+    for (let k = 0; k < 10; k++) {
+        const a = k / 10 * Math.PI * 2, x = Math.cos(a) * 6, z = Math.sin(a) * 6;
+        const rod = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5.4, 4), cel({ color: '#e8e8e8' })); rod.position.set(x, 3.4, z); spin.add(rod);
+        const h = new THREE.Mesh(new THREE.BoxGeometry(0.7, 1.2, 2), cel({ color: k % 2 ? '#f4f0e8' : '#6a4a2a' })); h.position.set(x, 2.4, z); h.rotation.y = -a; spin.add(h); horses.push(h);
+    }
+    for (let k = 0; k < 36; k++) { const a = k / 36 * Math.PI * 2; bulbs.push(place(Math.cos(a) * 8.6, 5.6, Math.sin(a) * 8.6)); cols.push(RAINBOW[k % RAINBOW.length]); }
+    spin.add(glows(instanced(new THREE.BoxGeometry(0.4, 0.4, 0.4), new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false }), bulbs, cols)));
+    g.add(spin);
+    g.position.set(b.x, s.y - 0.2, b.z);
+    group.add(g);
+    anim.push((t) => { spin.rotation.y = t * 0.5; horses.forEach((h, k) => { h.position.y = 2.4 + Math.sin(t * 3 + k) * 0.5; }); });
+};
+// strings of coloured bulbs hanging along both sides of the road
+PROPS.stringLights = (ctx, o) => {
+    const { S, group } = ctx, mats = [], cols = [], posts = [];
+    const span = o.span || 12;
+    for (let i = 0; i < S.length; i++) for (let side = 0; side < 2; side++) {
+        const s = S[i], off = s.w / 2 + (o.inset || 2.6), b = beside(S, i, side, off), k = i % span;
+        if (k === 0) posts.push(place(b.x, s.y, b.z, 0, 0.2, 5.4, 0.2));
+        if (i % 2) continue;
+        mats.push(place(b.x, s.y + 5.2 - Math.sin(k / span * Math.PI) * 1.4, b.z)); cols.push(RAINBOW[(i / 2 + side * 3) % RAINBOW.length]);
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#3a3e44' }), posts));
+    group.add(glows(instanced(new THREE.BoxGeometry(0.35, 0.35, 0.35), new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false }), mats, cols)));
+};
+// fireworks bursting over the park
+PROPS.fireworks = (ctx, o) => {
+    const { S, group, anim } = ctx, r = rng(333), bursts = [];
+    let cx = 0, cz = 0; S.forEach((s) => { cx += s.x; cz += s.z; }); cx /= S.length; cz /= S.length;
+    const y0 = S[0].y;
+    for (let k = 0; k < (o.count || 5); k++) {
+        const n = 48, pos = new Float32Array(n * 3), vel = [];
+        for (let j = 0; j < n; j++) { const a = r() * Math.PI * 2, e = Math.acos(2 * r() - 1), sp = 14 + r() * 6; vel.push([Math.sin(e) * Math.cos(a) * sp, Math.cos(e) * sp, Math.sin(e) * Math.sin(a) * sp]); }
+        const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+        const m = new THREE.PointsMaterial({ color: RAINBOW[k % RAINBOW.length], size: 2.2, sizeAttenuation: true, fog: false, transparent: true });
+        const pts = glows(new THREE.Points(g, m)); pts.frustumCulled = false;
+        group.add(pts);
+        bursts.push({ pts, pos, vel, n, period: 3.2 + r() * 2.4, phase: r() * 5, at: [cx + (r() - 0.5) * 200, y0 + 60 + r() * 40, cz + (r() - 0.5) * 200] });
+    }
+    anim.push((t) => bursts.forEach((b) => {
+        const u = ((t + b.phase) % b.period), life = 1.6;
+        b.pts.visible = u < life;
+        if (u >= life) return;
+        for (let j = 0; j < b.n; j++) {
+            const [vx, vy, vz] = b.vel[j];
+            b.pos[j * 3] = b.at[0] + vx * u; b.pos[j * 3 + 1] = b.at[1] + vy * u - 6 * u * u; b.pos[j * 3 + 2] = b.at[2] + vz * u;
+        }
+        b.pts.material.opacity = 1 - u / life;
+        b.pts.geometry.attributes.position.needsUpdate = true;
+    }));
+};
+// --- the moon ---
+PROPS.craters = (ctx, o) => {
+    const { S, group, TX } = ctx, r = rng(401), rims = [], floors = [];
+    for (let n = 0, tries = 0; n < (o.count || 26) && tries < 400; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i], R = 4 + r() * 14;
+        const b = beside(S, i, side, s.w / 2 + R + 6 + r() * 60);
+        if (!clear(S, b.x, b.z, s.w / 2 + R + 2)) continue;
+        rims.push(place(b.x, s.y + s.h[side] * 0.3 - 0.4, b.z, r() * 6, R, R * 0.12, R));
+        floors.push(place(b.x, s.y + s.h[side] * 0.3 - 0.3, b.z, 0, R * 0.8, 1, R * 0.8));
+        n++;
+    }
+    const torus = new THREE.TorusGeometry(1, 0.28, 5, 14); torus.rotateX(Math.PI / 2);
+    group.add(instanced(torus, cel({ map: TX.moon }), rims));
+    const disc = new THREE.CircleGeometry(1, 14); disc.rotateX(-Math.PI / 2);
+    group.add(instanced(disc, cel({ color: '#5a5a58' }), floors));
+};
+PROPS.domes = (ctx, o) => {
+    const { S, group, anim } = ctx, r = rng(409), blink = [];
+    for (let n = 0, tries = 0; n < (o.count || 5) && tries < 200; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i], R = 6 + r() * 6;
+        const b = beside(S, i, side, s.w / 2 + R + 10 + r() * 20);
+        if (!clear(S, b.x, b.z, s.w / 2 + R + 6)) continue;
+        const g = new THREE.Group();
+        const d = new THREE.Mesh(new THREE.SphereGeometry(R, 14, 8, 0, Math.PI * 2, 0, Math.PI / 2), cel({ color: '#e8eaee' })); g.add(d);
+        const band = glows(new THREE.Mesh(new THREE.CylinderGeometry(R * 0.98, R * 0.98, 0.6, 18, 1, true), new THREE.MeshBasicMaterial({ color: '#3ad0ff', side: THREE.DoubleSide }))); band.position.y = R * 0.3; g.add(band);
+        const ant = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 5, 4), cel({ color: '#c8c8c8' })); ant.position.y = R + 2.5; g.add(ant);
+        const l = glows(new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: '#ff2a2a', fog: false }))); l.position.y = R + 5.2; g.add(l); blink.push(l);
+        g.position.set(b.x, s.y + s.h[side] * 0.4 - 0.5, b.z);
+        group.add(g); n++;
+    }
+    // a rocket on its pad
+    const i = o.rocketAt || 90, s = S[i], b = beside(S, i, 1, s.w / 2 + 30), g = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(2, 2, 22, 12), cel({ color: '#f4f4f0' })); body.position.y = 13; g.add(body);
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(2, 6, 12), cel({ color: '#e8282a' })); nose.position.y = 27; g.add(nose);
+    for (let k = 0; k < 4; k++) { const fin = new THREE.Mesh(new THREE.BoxGeometry(0.3, 6, 3.4), cel({ color: '#e8282a' })); fin.position.set(Math.cos(k * Math.PI / 2) * 2.4, 4, Math.sin(k * Math.PI / 2) * 2.4); fin.rotation.y = -k * Math.PI / 2; g.add(fin); }
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(1.4, 30, 1.4), cel({ color: '#c8902a' })); tower.position.set(5, 15, 0); g.add(tower);
+    g.position.set(b.x, s.y - 0.5, b.z); group.add(g);
+    anim.push((t) => blink.forEach((l, k) => { l.visible = Math.floor(t * 1.3 + k * 0.4) % 2 === 0; }));
+};
+// --- the mine ---
+PROPS.crystals = (ctx, o) => {
+    const { S, group } = ctx, r = rng(419), mats = [], cols = [], C = ['#3ad0ff', '#b04aff', '#4aff7a', '#ff4fa8'];
+    for (let i = 3; i < S.length; i += 4) for (let side = 0; side < 2; side++) {
+        if (r() > (o.density || 0.45)) continue;
+        const s = S[i], b = beside(S, i, side, s.w / 2 + 1.6 - r() * 0.3), sc = 0.4 + r() * 0.9;
+        mats.push(place(b.x, s.y + 0.4 + r() * 2.6, b.z, r() * 6, sc, sc * (1.6 + r()), sc));
+        cols.push(C[(r() * C.length) | 0]);
+    }
+    group.add(glows(instanced(new THREE.OctahedronGeometry(0.6, 0), new THREE.MeshBasicMaterial({ color: '#ffffff' }), mats, cols)));
+};
+// pit props: timber frames along the tunnel every few metres
+PROPS.timbers = (ctx, o) => {
+    const { S, group } = ctx, mats = [];
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    for (let i = 0; i < S.length; i += o.every || 7) {
+        const s = S[i], R = s.w / 2 + 1.5, ry = yaw(s);
+        for (const sg of [-1, 1]) mats.push(place(s.x + s.sx * R * sg, s.y - 0.2, s.z + s.sz * R * sg, ry, 0.5, 4.6, 0.5));
+        mats.push(place(s.x, s.y + 4.3, s.z, ry + Math.PI / 2, s.w + 3.4, 0.5, 0.5));
+    }
+    group.add(instanced(box, cel({ color: '#6a4a2a' }), mats));
 };
 
 export function buildProps(ctx) {

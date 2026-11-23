@@ -1,6 +1,6 @@
 /* Gravel Riot: menus, garage, test drive with power-ups and practice cars. */
 import * as THREE from 'three';
-import { RES, Post, setWobble, glows, MAIN_ONLY, GLOW } from './retro.js';
+import { RES, Post, setWobble, glows, MAIN_ONLY, GLOW, ENV } from './retro.js';
 import { surfaceTextures } from './textures.js';
 import { buildTrack } from './track.js';
 import { Car, CARS, SURF, makeCarMesh } from './car.js';
@@ -38,6 +38,7 @@ for (const k of ['races', 'km', 'top', 'drift', 'jump', 'near', 'smash', 'takedo
 if (!['kmh', 'mph'].includes(CFG.units)) CFG.units = 'kmh';
 const CODRIVER = ['voice', 'notes', 'off'];
 if (!['kart', 'rally'].includes(CFG.driftStyle)) CFG.driftStyle = 'kart';
+if (CFG.refl == null) CFG.refl = true;
 const SPARK = ['#ffe8a0', '#3ad0ff', '#ff4a2a', '#c44aff'];       // charging, then blue, red and purple
 // a four-pointed spark star; the sprites glow, flicker and grow with the charge
 const sparkTex = (() => {
@@ -72,7 +73,7 @@ const speedTxt = (ms) => CFG.units === 'mph' ? `${Math.round(ms * 2.237)} mph` :
 // the radio: track music, or any station you like
 const STATIONS = [[null, 'TRACK MUSIC'], ['world', 'STREET 104 · funk'], ['neon', 'NEON 80 · synthwave'], ['coast', 'SURF 101 · surf rock'], ['harbour', 'DOCKSIDE · drum & bass'],
     ['airfield', 'RUNWAY · trance'], ['autumn', 'LEAF FM · lo-fi'], ['volcano', 'MAGMA · industrial'], ['stadium', 'ARENA · big beat'], ['alpine', 'ALPINE FM · folk rock'],
-    ['canyon', 'DUST 88 · desert twang'], ['jungle', 'CANOPY · tribal'], ['oldtown', 'PLAZA · polka'], ['frost', 'GLACIER · ice breaks'], ['race1', 'RIOT 1 · electro'], ['race2', 'RIOT 2 · electro'], ['race3', 'RIOT 3 · electro']];
+    ['canyon', 'DUST 88 · desert twang'], ['jungle', 'CANOPY · tribal'], ['oldtown', 'PLAZA · polka'], ['frost', 'GLACIER · ice breaks'], ['tokyo', 'EUROBEAT 99 · eurobeat'], ['park', 'CARNIVAL · fairground'], ['moon', 'ORBIT · space ambient'], ['icelake', 'PIXEL FM · chiptune'], ['cross', 'FAST 172 · punk'], ['mine', 'DEEP · dark bass'], ['race1', 'RIOT 1 · electro'], ['race2', 'RIOT 2 · electro'], ['race3', 'RIOT 3 · electro']];
 if (!(CFG.radio >= 0 && CFG.radio < STATIONS.length)) CFG.radio = 0;
 const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2', stadium: 'race2', jungle: 'race3', oldtown: 'race1', neon: 'race2', coast: 'race1', volcano: 'race3', autumn: 'race1', airfield: 'race2', world: 'race3' };
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
@@ -121,6 +122,22 @@ scene.add(sun, hemi);
 const sunDisc = glows(new THREE.Mesh(new THREE.CircleGeometry(34, 20), new THREE.MeshBasicMaterial({ color: '#ffd8a0', fog: false })));
 scene.add(sunDisc);
 const sunDir = new THREE.Vector3();
+// the world around the player's car, captured into a little cube map a few times a second for reflections
+const envRT = new THREE.WebGLCubeRenderTarget(48, { generateMipmaps: false, minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+const envCam = new THREE.CubeCamera(0.5, 700, envRT);
+ENV.map.value = envRT.texture;
+let envN = 0;
+function updEnv() {
+    ENV.k.value = CFG.refl && car ? 1 : 0;
+    if (!ENV.k.value || (envN++ % 4) !== 0) return;
+    const vis = car.mesh.root.visible, sv = shadow ? shadow.visible : false;
+    car.mesh.root.visible = false; if (shadow) shadow.visible = false;
+    envCam.position.set(car.x, car.y + 1.1, car.z);
+    ENV.map.value = null;              // other cars must not read the map while it is being drawn
+    envCam.update(renderer, scene);
+    ENV.map.value = envRT.texture;
+    car.mesh.root.visible = vis; if (shadow) shadow.visible = sv;
+}
 
 /* ---------- dust, spray and smoke: stylised cel-shaded puffs ---------- */
 const PUFFS = 700;
@@ -519,7 +536,9 @@ const rankCars = () => { const N = track.N; return [...cars].sort((a, b) => (b.d
 const CUPS = [
     { id: 'dirt', name: 'DIRT CUP', tracks: ['alpine', 'canyon', 'jungle', 'frost'] },
     { id: 'city', name: 'CITY CUP', tracks: ['harbour', 'oldtown', 'neon', 'stadium'] },
-    { id: 'wild', name: 'WILD CUP', tracks: ['coast', 'autumn', 'airfield', 'volcano'] }
+    { id: 'wild', name: 'WILD CUP', tracks: ['coast', 'autumn', 'airfield', 'volcano'] },
+    { id: 'night', name: 'NIGHT CUP', tracks: ['tokyo', 'park', 'mine', 'neon'] },
+    { id: 'frontier', name: 'FRONTIER CUP', tracks: ['cross', 'icelake', 'moon', 'frost'] }
 ];
 const CUP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 // a car with the player's paint job and parts
@@ -933,6 +952,15 @@ function updDrive(dt) {
         c.step(dt, inp);
         wallHit(c);
         if (!roam) laps(c, dt);
+        if (track.boosts && track.boosts.length && c.wrecked <= 0) {
+            for (const b of track.boosts) {
+                const d = ((c.q.i - b) % track.N + track.N) % track.N;
+                if ((d < 3 || d > track.N - 2) && Math.abs(c.q.d) < track.S[b].w * 0.32 && !(c.padT > T)) {
+                    c.nitro = Math.max(c.nitro, 1.1); c.padT = T + 0.8; c.flashAura('#ffb84a', 0.5);
+                    if (c === car) { audio.fx('whoosh'); fx.tint('#ffb84a', 0.5); burst = Math.max(burst, 0.6); }
+                }
+            }
+        }
         if (c.wrecking && c.wrecked <= 0) { c.respawn(); c.wrecking = false; c.lapN = c.lapN; }
         const thr = race && race.count > 0 ? 0 : c === car && !c.driver ? readDrive().throttle : 1;
         c.stuckT = c.speed < 1 && thr && c.wrecked <= 0 ? c.stuckT + dt : 0;
@@ -1598,6 +1626,7 @@ function cycle(what, dir) {
     if (what === 'view') { CFG.view = VIEWS[(VIEWS.indexOf(CFG.view) + (dir > 0 ? 1 : VIEWS.length - 1)) % VIEWS.length]; if (cockpit) cockpit.setVisible(mode === 'drive' && CFG.view === 'cockpit'); if (mode === 'drive') message(VIEWN[CFG.view], 0.8); }
     if (what === 'codriver') CFG.codriver = CODRIVER[(CODRIVER.indexOf(CFG.codriver) + 1) % CODRIVER.length];
     if (what === 'units') CFG.units = CFG.units === 'kmh' ? 'mph' : 'kmh';
+    if (what === 'refl') CFG.refl = !CFG.refl;
     if (what === 'driftStyle') CFG.driftStyle = CFG.driftStyle === 'kart' ? 'rally' : 'kart';
     if (what === 'diff') { const k = Object.keys(DIFFS); CFG.diff = k[(k.indexOf(CFG.diff) + (dir > 0 ? 1 : k.length - 1)) % k.length]; }
     if (what === 'music') { CFG.music = !CFG.music; music.setOn(CFG.music); }
@@ -1613,6 +1642,7 @@ function syncOptions() {
     set('lines', CFG.lines ? 'ON' : 'OFF');
     set('view', VIEWN[CFG.view]);
     set('units', CFG.units === 'mph' ? 'MPH' : 'KM/H');
+    set('refl', CFG.refl ? 'ON' : 'OFF');
     set('driftStyle', CFG.driftStyle === 'kart' ? 'KART' : 'RALLY');
     set('codriver', { voice: 'VOICE', notes: 'ARROWS', off: 'OFF' }[CFG.codriver]);
     set('radio', STATIONS[CFG.radio][1].split(' · ')[0]);
@@ -1831,7 +1861,7 @@ function frame(now) {
         post.set({ drops: inCockpit && drops.any ? drops.tex : null });
         const rv = mode === 'drive' ? car.speed : 0;
         const rainy = roam ? (roam.atmos.snow ? 0 : rainK) : rainK;
-        post.set({ rain: rainy * (inCockpit ? 0.6 : 0.8), slant: 0.15 + Math.min(0.6, rv / 80) });
+        post.set({ rain: rainy * (inCockpit ? 0.6 : 0.8), slant: 0.15 + Math.min(0.6, rv / 80), wet: CFG.refl ? (roam ? (roam.atmos.snow ? 0 : rainK) : track.def.rain ? 1 : 0) : 0 });
         audio.setRain(rainy * (inCockpit ? 1 : 0.6));
         updPuffs(dt);
         if (msgT > 0 && (msgT -= dt) <= 0) $('#h-msg').hidden = true;
@@ -1861,6 +1891,7 @@ function frame(now) {
         const driving = mode === 'drive';
         if (driving) { if (cockpit.rt.width !== 96 * CFG.res) cockpit.rt.setSize(96 * CFG.res, 28 * CFG.res); cockpit.renderMirror(renderer, scene); }
         if (photo) photoCam(dt);
+        updEnv();
         post.setInset(cockpit.rt.texture, driving && CFG.view !== 'cockpit' && !photo && !mapOpen && !(race && race.intro > 0));
         post.render(scene, cam);
         if (driving) drawMinimap();

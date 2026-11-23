@@ -23,6 +23,32 @@ export function retro(mat, doSnap = true) {
     mat.customProgramCacheKey = () => 'retro-snap';
     return mat;
 }
+// Reflections for car paint and glass: a cube map of the world around the player's car, sampled along
+// the reflected view ray, banded like the toon shading and stronger at grazing angles, plus a hard glint.
+export const ENV = { map: { value: null }, k: { value: 1 } };
+export function reflective(mat, k = 0.5) {
+    const prev = mat.onBeforeCompile;
+    const key = mat.customProgramCacheKey ? mat.customProgramCacheKey() : '';
+    mat.onBeforeCompile = (sh, r) => {
+        if (prev) prev.call(mat, sh, r);
+        sh.uniforms.uEnv = ENV.map; sh.uniforms.uEnvK = ENV.k; sh.uniforms.uRefl = { value: k };
+        sh.fragmentShader = 'uniform samplerCube uEnv;\nuniform float uEnvK, uRefl;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `
+            if (uEnvK > 0.0) {
+                vec3 vdir = normalize(vViewPosition);
+                vec3 nW = inverseTransformDirection(normal, viewMatrix);
+                vec3 rW = reflect(inverseTransformDirection(-vdir, viewMatrix), nW);
+                vec3 env = textureCube(uEnv, vec3(-rW.x, rW.yz)).rgb;
+                float lum = dot(env, vec3(0.3, 0.59, 0.11));
+                env = env / max(lum, 0.002) * (floor(lum * 4.0 + 0.5) / 4.0);
+                float fres = pow(1.0 - clamp(dot(vdir, normal), 0.0, 1.0), 2.5);
+                outgoingLight = mix(outgoingLight, env * mix(vec3(1.0), diffuseColor.rgb, 0.55), clamp(uRefl * uEnvK * (0.06 + 0.6 * fres), 0.0, 0.65));
+                outgoingLight += step(0.94, max(dot(rW, normalize(vec3(0.35, 1.0, 0.25))), 0.0)) * 0.3 * uRefl * uEnvK;
+            }
+            #include <opaque_fragment>`);
+    };
+    mat.customProgramCacheKey = () => key + '-refl';
+    return mat;
+}
 export const setWobble = (k) => { snap.value.set(k ? RES.w / 2 / k : 0, k ? RES.h / 2 / k : 0); };
 
 // Three hard light bands: shadow, mid, lit.
@@ -46,7 +72,7 @@ uniform sampler2D tDepth;
 uniform sampler2D tGlow;
 uniform sampler2D tDrops;
 uniform float uDropsOn;
-uniform float uRain, uRainSlant;
+uniform float uRain, uRainSlant, uWet;
 uniform vec3 uTint;
 uniform float uTintK;
 uniform float uGlow;
@@ -86,6 +112,14 @@ void main() {
     float gm = max(gw.r, max(gw.g, gw.b));
     float gq = floor(gm * 3.0 + 0.1) / 3.0;
     g += (gm > 0.002 ? gw / gm * gq : vec3(0.0)) * uGlow;
+    // a wet road: every light smears down into a banded streak below it
+    if (uWet > 0.01) {
+        vec3 st = vec3(0.0);
+        for (int i = 1; i <= 9; i++) { float f = float(i); st += toSRGB(clamp(texture2D(tGlow, vUv + vec2((fract(sin(vUv.y * 900.0 + f) * 43758.0) - 0.5) * 0.003, f * 0.016)).rgb, 0.0, 1.0)) * (1.0 - f / 10.0); }
+        float sm = max(st.r, max(st.g, st.b));
+        st = sm > 0.01 ? st / sm * floor(sm * 2.0) / 2.0 : vec3(0.0);
+        g += st * 0.32 * uWet * smoothstep(0.58, 0.3, vUv.y);
+    }
     // a power-up's colour washes in from the screen edges when it fires
     if (uTintK > 0.01) g = mix(g, uTint, uTintK * smoothstep(0.42, 0.9, length(vg) * 1.5));
     if (wet > 0.2) {
@@ -171,7 +205,7 @@ export class Post {
                 uRes: { value: new THREE.Vector2(RES.w, RES.h) }, uNear: { value: 0.3 }, uFar: { value: 1500 },
                 uInkOn: { value: 1 }, uInk: { value: new THREE.Vector3(17, 18, 26) }, uLine: { value: new THREE.Vector3(255, 255, 255) },
                 uSpeed: { value: 0 }, uTime: { value: 0 }, uBurst: { value: 0 },
-                uSat: { value: 1 }, uCon: { value: 1 }, uVig: { value: 0 }, tGlow: { value: null }, uGlow: { value: 1.0 }, tDrops: { value: null }, uDropsOn: { value: 0 }, uRain: { value: 0 }, uRainSlant: { value: 0.18 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uTintK: { value: 0 },
+                uSat: { value: 1 }, uCon: { value: 1 }, uVig: { value: 0 }, tGlow: { value: null }, uGlow: { value: 1.0 }, tDrops: { value: null }, uDropsOn: { value: 0 }, uRain: { value: 0 }, uRainSlant: { value: 0.18 }, uWet: { value: 0 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uTintK: { value: 0 },
                 uShadow: { value: new THREE.Vector3(1, 1, 1) }, uHigh: { value: new THREE.Vector3(1, 1, 1) }
             },
             vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -285,6 +319,7 @@ export class Post {
         if (fx.burst != null) u.uBurst.value = fx.burst;
         if (fx.time != null) u.uTime.value = fx.time;
         if (fx.rain != null) u.uRain.value = fx.rain;
+        if (fx.wet != null) u.uWet.value = fx.wet;
         if (fx.tint) u.uTint.value.set(...fx.tint);
         if (fx.tintK != null) u.uTintK.value = fx.tintK;
         if (fx.slant != null) u.uRainSlant.value = fx.slant;

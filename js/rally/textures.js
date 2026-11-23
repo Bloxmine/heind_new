@@ -182,6 +182,16 @@ export function surfaceTextures() {
             speckle(x, w, h, ['#4a4644', '#544e4a', '#423e3c', '#5c5652'], 4, 97);
             dots(x, w, h, ['#2a2626', '#6e6662'], 60, 2, 6);
         }),
+        ice: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#b8dcec', '#c8e6f4', '#a8d0e4', '#d4eef8'], 8, 101);
+            x.strokeStyle = '#f4fcff'; x.lineWidth = 1;
+            const r = rng(31); for (let i = 0; i < 7; i++) { x.beginPath(); let px = r() * 64, py = r() * 64; x.moveTo(px, py); for (let k = 0; k < 4; k++) { px += (r() - 0.5) * 24; py += (r() - 0.5) * 24; x.lineTo(px, py); } x.stroke(); }
+            dots(x, w, h, ['#ffffff'], 30, 1, 33);
+        }),
+        moon: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#8a8a88', '#949492', '#7e7e7c', '#9c9c98'], 4, 103);
+            const r = rng(35); for (let i = 0; i < 9; i++) { const cx = r() * 64, cy = r() * 64, cr = 2 + r() * 5; x.fillStyle = '#6a6a68'; x.beginPath(); x.arc(cx, cy, cr, 0, Math.PI * 2); x.fill(); x.fillStyle = '#a8a8a4'; x.beginPath(); x.arc(cx + 1, cy + 1, cr * 0.7, 0, Math.PI * 2); x.fill(); }
+        }),
         leaves: make(64, 64, (x, w, h) => {
             speckle(x, w, h, ['#6a4a2a', '#7a5430', '#5e4024', '#84603a'], 8, 99);
             dots(x, w, h, ['#e8782a', '#c84a1a', '#e8b030', '#a83a1a'], 120, 2, 8);
@@ -269,6 +279,22 @@ export function skyTexture(sky) {
         const g = x.createLinearGradient(0, 0, 0, 100);
         g.addColorStop(0, sky.top); g.addColorStop(1, sky.horizon);
         x.fillStyle = g; x.fillRect(0, 0, w, h);
+        if (sky.stars) { const r = rng(77); for (let i = 0; i < 260; i++) { x.fillStyle = r() < 0.2 ? '#c8d8ff' : '#ffffff'; x.fillRect((r() * w) | 0, (r() * 90) | 0, 1, 1); } }
+        if (sky.aurora) {
+            // curtains of green and violet light, in flat bands
+            for (const [col, base, amp, ph] of [['#2affa0', 24, 10, 0], ['#7a4aff', 14, 8, 2], ['#4affd0', 34, 6, 4]]) {
+                x.fillStyle = col; x.globalAlpha = 0.55;
+                for (let px = 0; px < w; px += 2) { const y0 = base + Math.sin(px / w * Math.PI * 6 + ph) * amp + Math.sin(px / w * Math.PI * 14 + ph) * 3; x.fillRect(px, y0, 2, 14 + Math.sin(px * 0.3 + ph) * 5); }
+                x.globalAlpha = 1;
+            }
+        }
+        if (sky.planet) {
+            const { x: cx, y: cy, r: cr } = sky.planet;
+            x.fillStyle = '#2a5aa8'; x.beginPath(); x.arc(cx, cy, cr, 0, Math.PI * 2); x.fill();
+            x.fillStyle = '#4a9a4a'; for (const [dx, dy, s] of [[-4, -3, 6], [5, 2, 5], [-1, 6, 4]]) { x.beginPath(); x.arc(cx + dx, cy + dy, s, 0, Math.PI * 2); x.fill(); }
+            x.fillStyle = '#f4f8ff'; x.fillRect(cx - 10, cy - 8, 9, 2); x.fillRect(cx + 2, cy + 6, 8, 2);
+            x.fillStyle = 'rgba(0,0,0,0.55)'; x.beginPath(); x.arc(cx + cr * 0.55, cy, cr, -Math.PI / 2, Math.PI / 2); x.fill();
+        }
         if (sky.sun) { x.fillStyle = sky.sun; x.beginPath(); x.arc(sky.sunX || 380, sky.sunY || 40, 9, 0, Math.PI * 2); x.fill(); }
         const r = rng(sky.seed || 7);
         if (sky.clouds) {

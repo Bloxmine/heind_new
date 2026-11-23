@@ -142,6 +142,52 @@ export const SONGS = {
         bass: '..x...x...x...x.', bassType: 'saw', filter: 1500, pad: true,
         arp: '0120120120120120', arpOct: 12, arpType: 'super'
     },
+    // Tokyo Expressway: eurobeat, octave bass and a racing saw lead
+    tokyo: {
+        bpm: 155, key: K.fsm, barsPerChord: 1, kit: 'electro',
+        kick: 'x...x...x...x...', clap: '....x.......x...', hat: '..x...x...x...x.', open: '..x...x...x...x.',
+        bass: 'xoxoxoxoxoxoxoxo', bassType: 'saw', filter: 1700, pad: true,
+        arp: '0120120120120120', arpOct: 24, arpType: 'super',
+        mel: '0.2.3.4.3.2.0.2.4.5.4.3.2.0.2.3.', melType: 'saw', scale: 'minor', tonic: 66
+    },
+    // Moon Base: slow and spacey, bells drifting over a sub bass
+    moon: {
+        bpm: 84, key: K.frost, barsPerChord: 2, kit: 'soft',
+        kick: 'x.........x.....', snare: '', rim: '....x.......x...', shaker: '..x...x...x...x.',
+        bass: 'x.......x.......', bassType: 'sub', pad: true,
+        arp: '0...1...2...3...', arpOct: 24, arpType: 'bell',
+        mel: '0.......4.......3.......2.......', melType: 'bell', scale: 'pent', tonic: 69
+    },
+    // Crossover: fast punk, power chords and a driving bass
+    cross: {
+        bpm: 172, key: K.epent, barsPerChord: 1, kit: 'rock',
+        kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', tom: '............hmml',
+        bass: 'x.x.x.x.x.x.x.x.', bassType: 'dist', filter: 1800,
+        stab: 'x.....x.x.......', stabType: 'saw'
+    },
+    // Ice Lake: chiptune, square-wave arps and a bright little tune
+    icelake: {
+        bpm: 140, key: K.dmaj, barsPerChord: 1, kit: 'electro',
+        kick: 'x.......x.......', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        bass: 'x.x.o.x.x.x.o.x.', bassType: 'pluck', filter: 1400,
+        arp: '0120012001200120', arpOct: 12, arpType: 'square',
+        mel: '4.4.2.0.2.4.....5.5.4.2.4.......', melType: 'square', scale: 'major', tonic: 74
+    },
+    // Deep Mine: dark half-time, a growling bass, metal on metal
+    mine: {
+        bpm: 76, key: K.phryg, barsPerChord: 2, kit: 'industrial',
+        kick: 'x.......x..x....', snare: '........x.......', hat: '..x...x...x...x.', clank: '......x.......x.',
+        bass: 'x...........x...', bassType: 'reese', filter: 600, pad: true,
+        arp: 'x...............', arpOct: 24, arpType: 'bell'
+    },
+    // Thrill Park: a carnival organ, oom-pah bass and a calliope tune
+    park: {
+        bpm: 168, key: K.cmaj, barsPerChord: 1, kit: 'rock',
+        kick: 'x.......x.......', snare: '....x.......x...', hat: '..x...x...x...x.',
+        bass: 'x.......5.......', bassType: 'pluck', filter: 1000,
+        stab: '....x.x.....x.x.', stabType: 'organ',
+        mel: '0.2.4.7.6.4.2.4.5.4.2.0.1...0...', melType: 'organ', scale: 'major', tonic: 72
+    },
     // Free roam: street funk, slap bass, clav and horn hits
     world: {
         bpm: 104, key: K.funk, barsPerChord: 1, kit: 'electro', swing: 0.12,

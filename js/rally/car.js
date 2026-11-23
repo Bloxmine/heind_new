@@ -1,6 +1,6 @@
 /* Cars: low-poly models extruded from a side profile, and an arcade rally handling model. Forward is +z. */
 import * as THREE from 'three';
-import { cel, glows, GLOW } from './retro.js';
+import { cel, glows, GLOW, reflective } from './retro.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
@@ -180,9 +180,9 @@ export function makeCarMesh(spec) {
         g.computeVertexNormals();
         return new THREE.Mesh(g, m);
     };
-    const paint = mat({ color: spec.body, flatShading: true });
-    const stripe = mat({ color: spec.stripe, flatShading: true });
-    const glass = mat({ color: spec.glass || '#3a4a58', emissive: '#0a1016', flatShading: true });
+    const paint = reflective(mat({ color: spec.body, flatShading: true }), 0.5);
+    const stripe = reflective(mat({ color: spec.stripe, flatShading: true }), 0.4);
+    const glass = reflective(mat({ color: spec.glass || '#3a4a58', emissive: '#0a1016', flatShading: true }), 0.95);
     const dark = mat({ color: '#1c1c22', flatShading: true });
     let shell;
     if (B.saucer) {
@@ -333,7 +333,9 @@ export const SURF = {
     leaves: { grip: 0.66, drag: 0.5, dust: '#c86a2a' },
     water: { grip: 0.4, drag: 1.2, dust: '#9fd8f5' },
     lava: { grip: 0.5, drag: 1.0, dust: '#ff9a3a' },
-    sand: { grip: 0.74, drag: 0.05, dust: '#d8945a' }
+    sand: { grip: 0.74, drag: 0.05, dust: '#d8945a' },
+    ice: { grip: 0.36, drag: 0.02, dust: '#dff4ff' },
+    moon: { grip: 0.72, drag: 0.06, dust: '#a8a8a4' }
 };
 
 export class Car {
@@ -518,7 +520,7 @@ export class Car {
 
         // height: follow the ground, fly off crests
         const gy = nq.y;
-        this.vy -= 24 * dt;
+        this.vy -= 24 * (this.track.def.gravity || 1) * dt;
         this.y += this.vy * dt;
         if (this.y <= gy) {
             const climb = (gy - this.lastGy) / dt;
