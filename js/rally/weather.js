@@ -30,7 +30,9 @@ export class Rain {
         if (!this.lines.visible) return;
         const p = this.p, o = this.pos, c = cam.position;
         const vx = car ? car.vx : 0, vz = car ? car.vz : 0;
+        const lim = this.n * (this.k == null ? 1 : this.k);
         for (let i = 0; i < this.n; i++) {
+            if (i >= lim) { o.fill(0, i * 6, i * 6 + 6); continue; }
             let x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
             const snow = this.flaky, fall = snow ? (this.mode === 'embers' ? -1.5 : 3.2) : 26;
             y -= fall * dt;
