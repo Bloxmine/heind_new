@@ -128,6 +128,7 @@
                         <span class="blogo"><span class="logo-word"></span></span>
                         <i class="bbar"><b id="m-status"></b></i>
                     </header>
+                    <p class="bstep" id="m-step" hidden></p>
                     <h2 class="bsel" id="m-label">race</h2>
                     <div class="carousel" id="carousel"></div>
                     <p class="bdesc" id="m-desc"></p>
@@ -136,6 +137,7 @@
 
                 <!-- garage: the car in 3D, its stats on the left -->
                 <div class="ov garage" id="garage" hidden>
+                    <p class="bstep g-step" id="g-step" hidden></p>
                     <div class="g-nav"><span class="g-arrow">&#9664;</span><b id="g-count">1/8</b><span class="g-arrow">&#9654;</span></div>
                     <div class="g-class"><b id="g-cls">C</b></div>
                     <h2 id="g-name">VOLTA HS</h2>
@@ -171,6 +173,7 @@
                         <button type="button" data-cycle="fps">Frames &#9664;<b>30 FPS</b>&#9654;</button>
                         <button type="button" data-cycle="wobble">Wobble &#9664;<b>ON</b>&#9654;</button>
                         <button type="button" data-cycle="diff">Rivals &#9664;<b>NORMAL</b>&#9654;</button>
+                        <button type="button" data-cycle="driftStyle">Drifting &#9664;<b>KART</b>&#9654;</button>
                         <button type="button" data-cycle="codriver">Co-driver &#9664;<b>VOICE</b>&#9654;</button>
                         <button type="button" data-cycle="units">Speed in &#9664;<b>KM/H</b>&#9654;</button>
                         <button type="button" data-cycle="sound">Sound <b>ON</b></button>
@@ -184,7 +187,8 @@
                     <dl class="bctrl">
                         <dt>&uarr; &darr;</dt><dd>gas / brake &amp; reverse</dd>
                         <dt>&larr; &rarr;</dt><dd>steer</dd>
-                        <dt>SPACE</dt><dd>handbrake</dd>
+                        <dt>SPACE</dt><dd>hop &amp; drift (kart) / handbrake</dd>
+                        <dt>SHIFT</dt><dd>handbrake</dd>
                         <dt>Z</dt><dd>fire power-up forward</dd>
                         <dt>X</dt><dd>fire power-up backward</dd>
                         <dt>C</dt><dd>switch power-up slot</dd>
@@ -289,7 +293,7 @@
                 <button type="button" class="tbtn small" data-act="pause" aria-label="Pause">II</button>
             </div>
         </div>
-        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE handbrake &middot; Z/X fire &middot; C slot &middot; V camera &middot; M map &middot; H photo &middot; N radio &middot; P pause</span><span class="grow"></span></div>
+        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE drift &middot; Z/X fire &middot; C slot &middot; V camera &middot; M map &middot; H photo &middot; N radio &middot; P pause</span><span class="grow"></span></div>
     </section>
 </main>
 <div id="dialogs"></div>

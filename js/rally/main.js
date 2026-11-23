@@ -37,6 +37,34 @@ const ST = CFG.stats;
 for (const k of ['races', 'km', 'top', 'drift', 'jump', 'near', 'smash', 'takedown', 'perfect', 'painted', 'ghost', 'drifts']) if (ST[k] == null) ST[k] = 0;
 if (!['kmh', 'mph'].includes(CFG.units)) CFG.units = 'kmh';
 const CODRIVER = ['voice', 'notes', 'off'];
+if (!['kart', 'rally'].includes(CFG.driftStyle)) CFG.driftStyle = 'kart';
+const SPARK = ['#ffe8a0', '#3ad0ff', '#ff4a2a', '#c44aff'];       // charging, then blue, red and purple
+// a four-pointed spark star; the sprites glow, flicker and grow with the charge
+const sparkTex = (() => {
+    const c = document.createElement('canvas'); c.width = c.height = 32;
+    const x = c.getContext('2d');
+    x.fillStyle = '#ffffff';
+    for (const [w, l] of [[3, 15], [2, 10]]) {
+        for (let k = 0; k < (w === 3 ? 4 : 4); k++) {
+            x.save(); x.translate(16, 16); x.rotate(k * Math.PI / 2 + (w === 3 ? 0 : Math.PI / 4));
+            x.beginPath(); x.moveTo(-w, 0); x.lineTo(0, -l); x.lineTo(w, 0); x.fill(); x.restore();
+        }
+    }
+    x.beginPath(); x.arc(16, 16, 4, 0, Math.PI * 2); x.fill();
+    const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+    return t;
+})();
+function sparkSprites(c) {
+    if (c.sparkS) return c.sparkS;
+    c.sparkS = [-1, 1].map((sx) => {
+        const s = glows(new THREE.Sprite(new THREE.SpriteMaterial({ map: sparkTex, color: "#ffffff", alphaTest: 0.5, fog: false })));
+        s.position.set(sx * 0.95, 0.35, -c.mesh.B.len * 0.5);
+        s.visible = false;
+        c.mesh.root.add(s);
+        return s;
+    });
+    return c.sparkS;
+}
 if (!CODRIVER.includes(CFG.codriver)) CFG.codriver = 'voice';
 const VIEWS = ['chase', 'far', 'hood', 'cockpit'], VIEWN = { chase: 'CHASE', far: 'FAR CHASE', hood: 'HOOD', cockpit: 'COCKPIT' };
 if (!VIEWS.includes(CFG.view)) CFG.view = 'chase';
@@ -209,7 +237,7 @@ function showCar(spec) {
 const keys = new Set(), hits = new Set();
 const KEYMAP = {
     ArrowUp: 'up', KeyW: 'up', ArrowDown: 'down', KeyS: 'down', ArrowLeft: 'left', KeyA: 'left', ArrowRight: 'right', KeyD: 'right',
-    Space: 'hand', ShiftLeft: 'hand', KeyR: 'reset', Escape: 'pause', KeyP: 'pause', Enter: 'ok', NumpadEnter: 'ok', KeyF: 'full',
+    Space: 'hand', ShiftLeft: 'ebrake', ShiftRight: 'ebrake', KeyR: 'reset', Escape: 'pause', KeyP: 'pause', Enter: 'ok', NumpadEnter: 'ok', KeyF: 'full',
     KeyZ: 'fire', KeyX: 'fireBack', KeyC: 'cycle', KeyV: 'view', Backspace: 'back', KeyT: 'time', KeyY: 'weather', KeyM: 'map', KeyH: 'photo', KeyN: 'radio'
 };
 const typing = () => document.activeElement && document.activeElement.tagName === 'INPUT';
@@ -263,7 +291,9 @@ function readDrive() {
         steer: clamp(kSteer + pad.steer, -1, 1),
         throttle: Math.max(keys.has('up') ? 1 : 0, pad.throttle, isTouch() && !touch.brake ? 1 : 0),
         brake: Math.max(keys.has('down') ? 1 : 0, pad.brake, touch.brake ? 1 : 0),
-        handbrake: keys.has('hand') || pad.hand || touch.hand
+        // kart style: the drift button hops into a kart drift and Shift is the handbrake; rally style: it's the handbrake
+        drift: CFG.driftStyle === 'kart' && (keys.has('hand') || pad.hand || touch.hand),
+        handbrake: keys.has('ebrake') || (CFG.driftStyle !== 'kart' && (keys.has('hand') || pad.hand || touch.hand))
     };
 }
 // practice cars: follow the road on their own lane at their own pace (rivals with tactics come next)
@@ -438,7 +468,7 @@ function updateHUD() {
     setText('h-speed', String(Math.round(car.speed * (CFG.units === 'mph' ? 2.237 : 3.6))));
     const dr = $('#h-drift'), dOn = drift.on && drift.score > 60;
     dr.hidden = !dOn;
-    if (dOn) { setText('h-drift-n', Math.round(drift.score).toLocaleString('en')); setText('h-drift-x', '×' + drift.mult); dr.style.setProperty('--dk', Math.min(1, (drift.t % 1.5) / 1.5)); }
+    if (dOn) { setText('h-drift-n', Math.round(drift.score).toLocaleString('en')); setText('h-drift-x', '×' + drift.mult); dr.style.setProperty('--dk', Math.min(1, (drift.t % 1.5) / 1.5)); dr.style.setProperty('--tier', car.mk && car.mk.dir ? SPARK[car.mk.tier] : '#ff3d3d'); }
     setText('h-gear', car.vf < -0.5 ? 'R' : String(lastGear));
     setText('h-fans', String(fans));
     const hp = Math.ceil(car.health / 10);
@@ -610,7 +640,7 @@ const roamApi = {
     env: { sun, hemi, scene, sunDisc, sunDir }
 };
 function toMenu(sub) {
-    replay = null;
+    replay = null; flow = null;
     codriver.stop(); notes = null; $('#h-notes').hidden = true;
     if (race && race.intro > 0) endIntro();
     $('#intro').hidden = true; document.body.dataset.intro = '';
@@ -834,6 +864,29 @@ function carFx(c) {
     } else c.splashed = false;
     const surf = SURF[c.q.surface];
     const wet = track.wet;
+    // the spark stars at the back wheels
+    const kd = c.mk && c.mk.dir && c.ground;
+    if (kd || c.sparkS) {
+        const ss = sparkSprites(c), t = kd ? c.mk.tier : 0;
+        ss.forEach((s, k) => {
+            s.visible = !!kd;
+            if (!kd) return;
+            const flick = 0.75 + Math.random() * 0.5, size = (t ? 1.15 + t * 0.4 : 0.6) * flick;
+            s.scale.set(size, size, 1);
+            s.material.color.set(Math.random() < 0.15 ? '#ffffff' : SPARK[t]);
+            s.material.rotation = Math.random() * Math.PI;
+            s.position.y = 0.3 + Math.random() * 0.12;
+        });
+    }
+    if (c.mk && c.mk.dir && c.ground) {
+        const t = c.mk.tier, rx = -fz, rz = fx, back = c.mesh.B.len * 0.38;
+        const n = t === 0 ? (Math.random() < 0.35 ? 1 : 0) : 1 + t;
+        for (const sx of [-1, 1]) for (let k = 0; k < n; k++) {
+            const px = c.x - fx_ * back + rx * sx * 0.85, pz = c.z - fz * back + rz * sx * 0.85;
+            const out = (Math.random() * 2 + 1) * sx * -c.mk.dir;
+            puff(px, c.y + 0.2, pz, k % 3 === 2 ? '#ffffff' : SPARK[t], rx * out - fx_ * 2 + (Math.random() - 0.5), 1 + Math.random() * 2.5, rz * out - fz * 2 + (Math.random() - 0.5), t ? 0.5 : 0.28, 0.05, 0.2 + Math.random() * 0.15);
+        }
+    }
     if (c.ground && c.speed > 5 && ((surf && surf.dust) || wet)) {
         const rate = (0.35 + c.speed / 40 + c.slip / 6) * (wet ? 0.5 : 1);
         if (Math.random() < rate) for (const sx of [-1, 1]) {
@@ -891,6 +944,14 @@ function updDrive(dt) {
     if (car.scrape > 0.6 && !car.scrapeSnd) { audio.thud(car.scrape); car.scrapeSnd = true; }
     if (car.scrape < 0.1) car.scrapeSnd = false;
     if (!(race && race.count > 0) && !car.done) driving(dt);
+    if (car.hopped) { car.hopped = false; audio.thud(0.25); }
+    if (car.mkTierUp) { const t = car.mkTierUp; car.mkTierUp = 0; audio.beep(520 + t * 260, 0.07); car.flashAura(SPARK[t], 0.25); }
+    if (car.mkBoost) {
+        const t = car.mkBoost; car.mkBoost = 0;
+        audio.fx('nitro'); fx.tint(SPARK[t], 0.5 + t * 0.15); burst = Math.max(burst, 0.4 + t * 0.2); car.flashAura(SPARK[t], 0.6);
+        earn(['', 'Boost', 'Super Boost', 'Ultra Boost'][t], [0, 10, 25, 50][t]);
+    }
+    if (car.mkLost) { car.mkLost = false; feed('Boost lost', 0, 'bad'); }
     if (race && (race.kind === 'race' || race.kind === 'trial') && race.count <= 0 && !race.showed && tape.frames.length < 9000) {
         tape.acc += dt;
         while (tape.acc >= 0.1) { tape.acc -= 0.1; recordFrame(); }
@@ -918,9 +979,9 @@ function driving(dt) {
     // drift: sliding sideways at speed; the longer it lasts, the bigger the multiplier
     const ang = Math.abs(angDiff(Math.atan2(c.vx, c.vz), c.h));
     if (c.wrecked > 0) endDrift(false);
-    else if (c.ground && c.speed > 11 && c.slip > 3.2 && ang < 1.9 && c.vf > 0) {
+    else if (c.ground && c.speed > 11 && ((c.mk && c.mk.dir) || c.slip > 3.2) && ang < 1.9 && c.vf > 0) {
         drift.on = true; drift.calm = 0; drift.t += dt;
-        drift.score += dt * c.slip * 32;
+        drift.score += dt * (c.mk && c.mk.dir ? c.speed * 4.5 : c.slip * 32);
         drift.mult = Math.min(5, 1 + Math.floor(drift.t / 1.5));
     } else if (drift.on && c.ground && (drift.calm += dt) > 0.6) endDrift(true);
     // near misses: something passes close and fast without touching
@@ -1055,13 +1116,14 @@ $('#wmap-c').addEventListener('click', (e) => {
 /* ---------- race intro: three camera shots, then the countdown ---------- */
 /* ---------- replays: a tape of every car, played back by a camera director ---------- */
 let tape = { frames: [], acc: 0, n: 0 }, replay = null;
-const RW = 9;
+const RW = 10;
 function recordFrame() {
     const f = new Float32Array(cars.length * RW);
     cars.forEach((c, k) => {
         const o = k * RW;
         f[o] = c.x; f[o + 1] = c.y; f[o + 2] = c.z; f[o + 3] = c.h; f[o + 4] = c.pitch; f[o + 5] = c.roll + c.flip;
         f[o + 6] = c.nitro > 0 ? 1 : 0; f[o + 7] = c.braking ? 1 : 0; f[o + 8] = c.speed;
+        f[o + 9] = c.mk && c.mk.dir ? c.mk.dir * (c.mk.tier + 1) : 0;
     });
     tape.frames.push(f); tape.n = cars.length;
 }
@@ -1083,7 +1145,7 @@ function startReplay() {
 function exitReplay() {
     if (!replay) return;
     cars.forEach((c, k) => Object.assign(c, replay.save[k]));
-    cars.forEach((c) => c.sync(0));
+    cars.forEach((c) => { if (c.mk) Object.assign(c.mk, { dir: 0, tier: 0, charge: 0, pend: false }); c.sync(0); });
     replay = null;
     mode = 'drive'; document.body.dataset.mode = 'drive';
     $('#replay').hidden = true;
@@ -1100,6 +1162,8 @@ function poseReplay(dt) {
         c.nitro = A[o + 6] > 0.5 ? 0.3 : 0; c.braking = A[o + 7] > 0.5;
         c.speed = L(8); c.vf = c.speed; c.vx = Math.sin(c.h) * c.speed; c.vz = Math.cos(c.h) * c.speed; c.slip = 0;
         c.invuln = 0; c.ground = true; c.wrecked = 0; c.shield = 0;
+        const kd = A[o + 9];
+        c.mk = Object.assign(c.mk || {}, { dir: Math.sign(kd), tier: Math.max(0, Math.abs(kd) - 1), yaw: c.mk ? c.mk.yaw : 0 });
         c.q = track.query(c.x, c.z, c.q ? c.q.i : null);
         c.wheelSpin += c.speed * dt / c.mesh.B.wheelR;
         c.sync(0);
@@ -1289,10 +1353,10 @@ function inkify(src) {
     return out.toDataURL();
 }
 const MAIN_CARDS = [
-    { label: 'race', icon: 'race', desc: 'Eight cars, three laps, every power-up', act: () => { cup = null; startDrive('race'); } },
+    { label: 'race', icon: 'race', desc: 'Eight cars, three laps, every power-up', act: () => { cup = null; flow = 'race'; openCarousel('tracks'); } },
     { label: 'free roam', icon: 'world', desc: 'An open world: traffic, trains, rivals, hidden ducks, day and night', act: () => startRoam() },
     { label: 'cups', icon: 'cup', desc: 'Four races, points for every finish, a trophy at the end', act: () => openCarousel('cups') },
-    { label: 'time trial', icon: 'trial', desc: 'Just you and the ghost of your best lap', act: () => { cup = null; startDrive('trial'); } },
+    { label: 'time trial', icon: 'trial', desc: 'Just you and the ghost of your best lap', act: () => { cup = null; flow = 'trial'; openCarousel('tracks'); } },
     { label: 'test drive', icon: 'tracks', desc: 'Free laps with power-ups and three practice cars', act: () => { cup = null; startDrive('test'); } },
     { label: 'tracks', icon: 'tracks', desc: 'Pick where to race', act: () => openCarousel('tracks') },
     { label: 'garage', icon: 'garage', desc: 'Choose your car and paint it', act: () => openGarage() },
@@ -1308,10 +1372,11 @@ const cupCards = () => CUPS.map((c) => ({
     act: () => startCup(c.id)
 }));
 let carousel = { kind: 'main', items: MAIN_CARDS, sel: 0 };
+let flow = null;      // 'race' or 'trial' while picking a track and then a car
 function trackCards() {
     return TRACKS.map((t) => ({
         label: t.name.toLowerCase(), desc: `${title(t.blurb)} · ${t.weather === 'dry' ? 'dry' : t.weather}`,
-        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); clearTimeout(previewT); if (!trackDef || trackDef.id !== t.id) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); } previewId = null; openCarousel('main', cardIdx('tracks')); }
+        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); clearTimeout(previewT); if (!trackDef || trackDef.id !== t.id) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); } previewId = null; if (flow) openGarage(); else openCarousel('main', cardIdx('tracks')); }
     }));
 }
 // a little glowing outline of a track, for its card
@@ -1359,6 +1424,9 @@ function openCarousel(kind, sel) {
     carousel = { kind, items, sel: start };
     $('#carousel').innerHTML = items.map((it, i) => `<button type="button" class="bcard" data-card="${i}"><span class="ctag">${it.label}</span><img src="${it.img ? it.img() : cardIcon(it.icon)}" alt=""></button>`).join('');
     $('#m-back').hidden = kind === 'main';
+    if (kind !== 'tracks') flow = null;
+    const st = $('#m-step'); st.hidden = !(flow && kind === 'tracks');
+    if (!st.hidden) st.innerHTML = `${flow === 'race' ? 'Race' : 'Time trial'} · step 1 of 2 · <b>pick a track</b>`;
     placeCards();
 }
 function placeCards() {
@@ -1389,7 +1457,7 @@ function carouselInput() {
     if (press('left')) { carousel.sel = (carousel.sel + n - 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('right')) { carousel.sel = (carousel.sel + 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('ok')) { audio.beep(990, 0.06); carousel.items[carousel.sel].act(); }
-    if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); openCarousel('main', cardIdx(carousel.kind)); }
+    if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); const f = flow; flow = null; openCarousel('main', f ? cardIdx(f === 'race' ? 'race' : 'time trial') : cardIdx(carousel.kind)); }
 }
 
 /* ---------- garage: the cars in 3D, locked ones as silhouettes, and the paint shop ---------- */
@@ -1400,6 +1468,8 @@ const GLOWS = [null, '#3ad0ff', '#ff3a6e', '#4aff7a', '#b04aff', '#ffe23a', '#ff
 function openGarage() {
     mode = 'garage';
     hideAll(); show('garage'); setMenu(null);
+    const st = $('#g-step'); st.hidden = !flow;
+    if (flow) st.innerHTML = `${flow === 'race' ? 'Race' : 'Time trial'} · step 2 of 2 · <b>pick your car</b> · ${title(trackById(CFG.track).name)}`;
     gIdx = Math.max(0, CARS.indexOf(carById(CFG.car)));
     setCustom(false);
     garageShow();
@@ -1459,9 +1529,10 @@ function garageInput() {
     if (press('cycle') && unlocked(s)) { setCustom(true); audio.beep(900, 0.05); }
     if (press('ok')) {
         if (!unlocked(s)) { audio.fx('block'); return; }
-        CFG.car = s.id; saveCfg(); audio.fx('pickup'); openCarousel('main', cardIdx('garage'));
+        CFG.car = s.id; saveCfg(); audio.fx('pickup');
+        if (flow) { const f = flow; flow = null; startDrive(f); } else openCarousel('main', cardIdx('garage'));
     }
-    if (press('back')) { showCar(specFor(CFG.car)); openCarousel('main', cardIdx('garage')); }
+    if (press('back')) { showCar(specFor(CFG.car)); if (flow) openCarousel('tracks'); else openCarousel('main', cardIdx('garage')); }
 }
 $('#garage').addEventListener('click', (e) => {
     const a = e.target.closest('.g-arrow');
@@ -1512,6 +1583,7 @@ function cycle(what, dir) {
     if (what === 'view') { CFG.view = VIEWS[(VIEWS.indexOf(CFG.view) + (dir > 0 ? 1 : VIEWS.length - 1)) % VIEWS.length]; if (cockpit) cockpit.setVisible(mode === 'drive' && CFG.view === 'cockpit'); if (mode === 'drive') message(VIEWN[CFG.view], 0.8); }
     if (what === 'codriver') CFG.codriver = CODRIVER[(CODRIVER.indexOf(CFG.codriver) + 1) % CODRIVER.length];
     if (what === 'units') CFG.units = CFG.units === 'kmh' ? 'mph' : 'kmh';
+    if (what === 'driftStyle') CFG.driftStyle = CFG.driftStyle === 'kart' ? 'rally' : 'kart';
     if (what === 'diff') { const k = Object.keys(DIFFS); CFG.diff = k[(k.indexOf(CFG.diff) + (dir > 0 ? 1 : k.length - 1)) % k.length]; }
     if (what === 'music') { CFG.music = !CFG.music; music.setOn(CFG.music); }
     if (what === 'weather') { CFG.weather = WEATHERS[(WEATHERS.indexOf(CFG.weather) + (dir > 0 ? 1 : WEATHERS.length - 1)) % WEATHERS.length]; saveCfg(); reloadTrack(); }
@@ -1526,6 +1598,7 @@ function syncOptions() {
     set('lines', CFG.lines ? 'ON' : 'OFF');
     set('view', VIEWN[CFG.view]);
     set('units', CFG.units === 'mph' ? 'MPH' : 'KM/H');
+    set('driftStyle', CFG.driftStyle === 'kart' ? 'KART' : 'RALLY');
     set('codriver', { voice: 'VOICE', notes: 'ARROWS', off: 'OFF' }[CFG.codriver]);
     set('radio', STATIONS[CFG.radio][1].split(' · ')[0]);
     $('.b-speed small').textContent = CFG.units === 'mph' ? 'mph' : 'km/h';

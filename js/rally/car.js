@@ -353,6 +353,14 @@ export class Car {
         this.flip = 0; this.flipRate = 0;
         this.slots = []; this.sel = 0;
     }
+    // let go of a kart drift: a boost as big as the sparks were hot (unless it was lost)
+    endKart(boost) {
+        const mk = this.mk;
+        if (!mk || !mk.dir) return;
+        if (boost && mk.tier > 0) { this.nitro = Math.max(this.nitro, [0, 0.6, 1.1, 1.7][mk.tier]); this.mkBoost = mk.tier; }
+        else if (mk.tier > 0) this.mkLost = true;
+        mk.dir = 0; mk.charge = 0; mk.tier = 0; mk.pend = false;
+    }
     flashAura(col, t = 0.6) { this.auraCol = col; this.auraT = Math.max(this.auraT || 0, t); }
     wreck() {
         this.wrecked = 2.6;
@@ -423,7 +431,31 @@ export class Car {
         this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
         this.braking = inp.brake > 0 && vf > 1;
         const spd = Math.abs(vf);
-        if (g) {
+        // kart drifting: tap the drift button to hop, lean into a direction and the car locks into a
+        // carving slide; the longer (and tighter) you hold it, the hotter the sparks and the bigger the boost
+        const mk = this.mk || (this.mk = { dir: 0, charge: 0, tier: 0, held: false, pend: false, yaw: 0 });
+        // a press is remembered for a moment, so one made over a bump still hops when the wheels touch down
+        if (inp.drift && !mk.held) mk.buf = 0.2;
+        mk.held = !!inp.drift;
+        mk.buf = (mk.buf || 0) - dt;
+        if (mk.buf > 0 && inp.drift && !mk.dir && g && spd > 10 && vf > 0 && this.wrecked <= 0) {
+            mk.buf = 0;
+            this.vy = 4.2; this.y += 0.05; mk.pend = true; this.hopped = true;
+            mk.dir = Math.abs(inp.steer) > 0.15 ? Math.sign(inp.steer) : 0;
+        }
+        if (mk.pend && !mk.dir && inp.drift && Math.abs(inp.steer) > 0.15) mk.dir = Math.sign(inp.steer);
+        if (mk.dir && (!inp.drift || spd < 8 || this.wrecked > 0 || vf < 0)) this.endKart(inp.drift ? false : true);
+        if (mk.dir && g) {
+            const tight = clamp(this.steer * mk.dir, -1, 1);
+            mk.charge += dt * (0.75 + 0.55 * Math.max(0, tight));
+            const tier = mk.charge > 3.4 ? 3 : mk.charge > 2.0 ? 2 : mk.charge > 0.9 ? 1 : 0;
+            if (tier > mk.tier) { mk.tier = tier; this.mkTierUp = tier; }
+        }
+        if (g && mk.dir) {
+            const tight = clamp(this.steer * mk.dir, -1, 1);
+            const wT = -mk.dir * (0.5 + 0.9 * (tight + 1) / 2) * Math.min(1, spd / 18);
+            this.w += (wT - this.w) * Math.min(1, dt * 6);
+        } else if (g) {
             const lock = 2.3 - 1.25 * Math.min(1, spd / sp.maxSpeed);
             const turn = Math.min(1, spd / 6) * Math.sign(vf || 1);
             let wT = -this.steer * lock * turn;
@@ -448,7 +480,7 @@ export class Car {
             vf -= vf * (0.06 + surf.drag) * dt;
             if (!inp.throttle && !inp.brake) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 2 * dt);
             // sideways grip: low grip and the handbrake let the tail slide out
-            const lat = (inp.handbrake ? 1.3 : 7.5) * surf.grip * sp.grip;
+            const lat = (inp.handbrake ? 1.3 : mk.dir ? 4.6 : 7.5) * surf.grip * sp.grip;
             const before = vr;
             vr *= Math.exp(-lat * dt);
             vf -= Math.abs(before - vr) * 0.1 * Math.sign(vf); // sliding scrubs speed
@@ -477,6 +509,7 @@ export class Car {
                 const fwdIn = Math.sin(this.h) * nq.sx * sg + Math.cos(this.h) * nq.sz * sg;   // >0 nose into the wall
                 this.w += -sg * out * 0.09 * (fwdIn >= 0 ? 1 : -1) * Math.sign(this.vf || 1);
                 this.scrape = Math.min(1, out / 8 + 0.2);
+                if (out > 6 && this.mk && this.mk.dir) this.endKart(false);        // a wall loses the charge
                 if (out > (this.impact || 0)) { this.impact = out; this.impactX = this.x + nq.sx * sg * 1; this.impactZ = this.z + nq.sz * sg * 1; }
             }
             nq = this.track.query(this.x, this.z, nq.i);
@@ -493,6 +526,7 @@ export class Car {
             this.y = gy;
             this.vy = isFinite(climb) ? clamp(climb, -40, 40) : 0;
             this.ground = true; this.air = 0;
+            if (this.mk) this.mk.pend = false;
             if (this.flipRate) { this.flipRate = 0; this.flip = 0; this.land = Math.max(this.land, 0.8); }
         } else {
             this.ground = this.y - gy < 0.08;
@@ -515,7 +549,10 @@ export class Car {
         const m = this.mesh, q = this.q;
         m.root.position.set(this.x, this.y, this.z);
         m.tail.color.set(this.braking ? '#ff3a24' : '#6a0c06');
-        m.root.rotation.y = this.h;
+        // in a kart drift the nose swings into the corner
+        const mk = this.mk;
+        if (mk) { mk.yaw += ((mk.dir ? -mk.dir * 0.42 : 0) - mk.yaw) * Math.min(1, (dt || 0) * 9); }
+        m.root.rotation.y = this.h + (mk ? mk.yaw : 0);
         if (q && dt) {
             const fx = Math.sin(this.h), fz = Math.cos(this.h);
             const ahead = this.track.query(this.x + fx * 1.6, this.z + fz * 1.6, q.i).y;

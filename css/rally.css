@@ -485,3 +485,38 @@ body[data-intro="1"] #hud > :not(.rmsg) { visibility: hidden; }
 #ctrls { width: calc(var(--gp) * 290); padding-left: calc(var(--gp) * 8); padding-right: calc(var(--gp) * 8); }
 #ctrls .bctrl { font-size: calc(var(--gp) * 6); column-gap: calc(var(--gp) * 3.5); }
 #ctrls .bctrl dd { white-space: nowrap; }
+
+/* kart drift: the drift meter's edge shows the spark colour */
+.b-drift { border-left-color: var(--tier, var(--red)); }
+.b-drift i { background: linear-gradient(90deg, var(--tier, var(--red)) calc(var(--dk, 0) * 100%), #d8c8a8 0); }
+
+/* ---------- the HUD in dark ink: comic panels at night, so the race stays the brightest thing on screen ---------- */
+.bhud { --hud: #17171f; --hdots: radial-gradient(rgba(255, 243, 214, 0.08) 24%, transparent 27%) 0 0 / calc(var(--gp) * 3) calc(var(--gp) * 3); --hsh: calc(var(--gp) * 1.8) calc(var(--gp) * 1.8) 0 rgba(0, 0, 0, 0.6); }
+.bhud .bp { background: var(--hdots), var(--hud); color: var(--paper); box-shadow: var(--hsh); }
+.bhud .b-pos b, .bhud .b-time b, .bhud .b-speed b, .bhud .b-fans b { color: var(--paper); }
+.bhud .b-pos b i { color: #8a8478; }
+.bhud .b-hp { background: var(--hud); box-shadow: var(--hsh); } .bhud .b-hp i { background: #34343e; }
+.bhud .b-mirror { box-shadow: 0 0 0 calc(var(--gp) * 0.8) var(--yel), 0 0 0 calc(var(--gp) * 1.8) var(--ink), var(--hsh); }
+.bhud .b-map { background: var(--hud); box-shadow: 0 0 0 calc(var(--gp) * 0.8) var(--yel), 0 0 0 calc(var(--gp) * 1.8) var(--ink), calc(var(--gp) * 2) calc(var(--gp) * 2) 0 calc(var(--gp) * 1.8) rgba(0, 0, 0, 0.6); }
+.bhud .b-feed p { background: var(--hud); color: var(--paper); box-shadow: var(--hsh); }
+.bhud .b-feed p b { color: var(--yel); }
+.bhud .b-feed p.hot { background: var(--hud); color: var(--yel); border-color: var(--yel); }
+.bhud .b-feed p.hot b { color: var(--paper); }
+.bhud .b-feed p.bad { background: var(--red); color: var(--paper); }
+.bhud .b-slots i { background: rgba(23, 23, 31, 0.75); box-shadow: var(--hsh); }
+.bhud .b-slots i.sel { background: var(--hud); border-color: var(--yel); }
+.bhud .pn { background: var(--hdots), var(--hud); box-shadow: var(--hsh); } .bhud .pn b { color: var(--paper); } .bhud .pn small { color: var(--yel); }
+.bhud .pn.next { background: var(--hdots), var(--hud); border-color: var(--yel); } .bhud .pn.next b { color: var(--yel); }
+.bhud .b-drift { background: var(--hdots), var(--hud); box-shadow: var(--hsh); }
+.bhud .b-drift b { color: var(--paper); text-shadow: calc(var(--gp) * 1.2) calc(var(--gp) * 1.2) 0 var(--red); }
+.bhud .b-drift i { background: linear-gradient(90deg, var(--tier, var(--red)) calc(var(--dk, 0) * 100%), #34343e 0); }
+
+/* the step caption while picking a track and a car */
+.bstep {
+    position: absolute; left: 50%; top: calc(var(--gp) * 18); z-index: 2; margin: 0; transform: translateX(-50%) rotate(-1.5deg); white-space: nowrap;
+    padding: calc(var(--gp) * 1.4) calc(var(--gp) * 6); font: 600 calc(var(--gp) * 6.5) / 1 var(--f-ui2); color: var(--paper);
+    background: var(--ink); border: calc(var(--gp) * 0.8) solid var(--yel); box-shadow: calc(var(--gp) * 1.4) calc(var(--gp) * 1.4) 0 rgba(0, 0, 0, 0.6); text-shadow: none;
+}
+.bstep b { color: var(--yel); font-weight: 700; }
+.bstep[hidden] { display: none; }
+.g-step { left: auto; right: calc(var(--gp) * 8); top: calc(var(--gp) * 8); transform: rotate(1.5deg); }
