@@ -69,11 +69,13 @@ export class Pickups {
         scene.add(this.group);
         const { S, N } = track;
         const geo = new THREE.PlaneGeometry(1.9, 1.9);
-        for (const f of [0.1, 0.35, 0.6, 0.85]) {
-            const i = Math.round(f * N) % N, s = S[i];
-            for (const lane of [-0.3, 0, 0.3]) {
-                const o = lane * s.w;
-                const type = randomType();
+        this.pickType = () => { let t; do t = randomType(); while (track.noItems && track.noItems.includes(t)); return t; };
+        const spots = [];
+        if (track.itemSpots) track.itemSpots.forEach((p) => spots.push({ s: { x: p.x, z: p.z, y: p.y, sx: 0, sz: 0, w: 0 }, o: 0 }));
+        else for (const f of [0.1, 0.35, 0.6, 0.85]) { const s = S[Math.round(f * N) % N]; for (const lane of [-0.3, 0, 0.3]) spots.push({ s, o: lane * s.w }); }
+        for (const { s, o } of spots) {
+            {
+                const type = this.pickType();
                 const mat = new THREE.MeshBasicMaterial({ map: iconTex(type), transparent: true, alphaTest: 0.4, side: THREE.DoubleSide, fog: false });
                 const m = glows(new THREE.Mesh(geo, mat));
                 const x = s.x + s.sx * o, z = s.z + s.sz * o;
@@ -95,7 +97,7 @@ export class Pickups {
             if (p.off > 0) {
                 p.off -= dt;
                 if (p.off <= 0) {
-                    p.type = randomType(); p.m.material.map = iconTex(p.type); p.m.visible = true; p.ring.visible = true;
+                    p.type = this.pickType(); p.m.material.map = iconTex(p.type); p.m.visible = true; p.ring.visible = true;
                     p.halo.material.color.set(PU[p.type].col); p.ring.material.color.set(PU[p.type].col);
                 }
                 continue;

@@ -12,6 +12,7 @@ import { PU, Pickups, Weapons, iconURL } from './powerups.js';
 import { Driver, RIVALS, plan } from './ai.js';
 import { Music, SONGS } from './music.js';
 import { buildWorld, Roam } from './world.js';
+import { ARENAS, buildArena, Battle } from './battle.js';
 import { paceNotes, noteIcon, CoDriver } from './pacenotes.js';
 
 const $ = (q, r = document) => r.querySelector(q);
@@ -36,7 +37,7 @@ if (!CFG.ach) CFG.ach = {};
 const ST = CFG.stats;
 for (const k of ['races', 'km', 'top', 'drift', 'jump', 'near', 'smash', 'takedown', 'perfect', 'painted', 'ghost', 'drifts']) if (ST[k] == null) ST[k] = 0;
 if (!['kmh', 'mph'].includes(CFG.units)) CFG.units = 'kmh';
-const CODRIVER = ['voice', 'notes', 'off'];
+const CODRIVER = ['notes', 'off'];
 if (!['kart', 'rally'].includes(CFG.driftStyle)) CFG.driftStyle = 'kart';
 if (CFG.refl == null) CFG.refl = true;
 const SPARK = ['#ffe8a0', '#3ad0ff', '#ff4a2a', '#c44aff'];       // charging, then blue, red and purple
@@ -66,12 +67,12 @@ function sparkSprites(c) {
     });
     return c.sparkS;
 }
-if (!CODRIVER.includes(CFG.codriver)) CFG.codriver = 'voice';
+if (!CODRIVER.includes(CFG.codriver)) CFG.codriver = 'notes';
 const VIEWS = ['chase', 'far', 'hood', 'cockpit'], VIEWN = { chase: 'CHASE', far: 'FAR CHASE', hood: 'HOOD', cockpit: 'COCKPIT' };
 if (!VIEWS.includes(CFG.view)) CFG.view = 'chase';
 const speedTxt = (ms) => CFG.units === 'mph' ? `${Math.round(ms * 2.237)} mph` : `${Math.round(ms * 3.6)} km/h`;
 // the radio: track music, or any station you like
-const STATIONS = [[null, 'TRACK MUSIC'], ['world', 'STREET 104 · funk'], ['neon', 'NEON 80 · synthwave'], ['coast', 'SURF 101 · surf rock'], ['harbour', 'DOCKSIDE · drum & bass'],
+const STATIONS = [[null, 'STREET 104 · funk (default)'], ['world', 'STREET 104 · funk'], ['neon', 'NEON 80 · synthwave'], ['coast', 'SURF 101 · surf rock'], ['harbour', 'DOCKSIDE · drum & bass'],
     ['airfield', 'RUNWAY · trance'], ['autumn', 'LEAF FM · lo-fi'], ['volcano', 'MAGMA · industrial'], ['stadium', 'ARENA · big beat'], ['alpine', 'ALPINE FM · folk rock'],
     ['canyon', 'DUST 88 · desert twang'], ['jungle', 'CANOPY · tribal'], ['oldtown', 'PLAZA · polka'], ['frost', 'GLACIER · ice breaks'], ['tokyo', 'EUROBEAT 99 · eurobeat'], ['park', 'CARNIVAL · fairground'], ['moon', 'ORBIT · space ambient'], ['icelake', 'PIXEL FM · chiptune'], ['cross', 'FAST 172 · punk'], ['mine', 'DEEP · dark bass'], ['kowloon', 'NEON FM · future funk'], ['market', 'NIGHT STALL · lo-fi'], ['kyoto', 'SHRINE · taiko'], ['skyway', 'STORMFRONT · drum & bass'], ['mirage', 'MIRAGE · desert'], ['toybox', 'TOY RADIO · toy piano'], ['race1', 'RIOT 1 · electro'], ['race2', 'RIOT 2 · electro'], ['race3', 'RIOT 3 · electro']];
 if (!(CFG.radio >= 0 && CFG.radio < STATIONS.length)) CFG.radio = 0;
@@ -398,6 +399,7 @@ function drawMinimapBase() {
 }
 function drawMinimap() {
     if (roam) { roam.drawMap(mmx, cars, car); return; }
+    if (battle) { track.drawMap(mmx, cars, car); return; }
     mmx.clearRect(0, 0, 64, 64);
     mmx.drawImage(mmBase, 0, 0);
     for (const c of cars) {
@@ -471,7 +473,13 @@ function updateHUD() {
     const rv = $('#h-rev'), onGrid = !!(race && race.count > 0);
     rv.hidden = !onGrid;
     if (onGrid) { drawRev(); rv.classList.toggle('max', revHold >= 1); }
-    if (roam) {
+    if (battle) {
+        const h = battle.hud();
+        setText('h-pos', String(h.balloons)); setText('h-of', '3');
+        setText('h-lap', `${h.left}/${h.total} left`);
+        setText('h-time', `${Math.floor(h.time / 60)}:${String(Math.floor(h.time % 60)).padStart(2, '0')}`);
+        setText('h-best', `${h.pops} pop${h.pops === 1 ? '' : 's'}`);
+    } else if (roam) {
         const h = roam.hud();
         setText('h-pos', String(h.ducks)); setText('h-of', String(h.of));
         setText('h-lap', h.weather);
@@ -516,6 +524,7 @@ const fx = {
     event(target, by, what, kind) {
         const name = PU[kind] ? title(PU[kind].name) : title(kind);
         if (what === 'wreck') target.wrecking = true;
+        if (battle && (what === 'hit' || what === 'wreck')) battle.pop(target, by);
         if (by === car && target !== car) {
             if (what === 'hit') feed(`${name} Hit`, { volt: 35, seeker: 60, mine: 45, pulse: 25, storm: 40 }[kind] || 20, 'hot');
             if (what === 'wreck') { feed('Takedown', 100, 'hot'); message('TAKEDOWN!', 1.6); ST.takedown++; }
@@ -560,12 +569,13 @@ function startDrive(kind = race ? race.kind : 'race') {
     document.body.dataset.kind = kind;
     paused = false;
     hideAll(); show('hud'); setMenu(null);
-    race = { kind, laps: kind === 'race' ? trackById(CFG.track).laps || 3 : 0, count: kind === 'race' ? 3.99 : 0, order: [], done: false, rev: null };
+    race = { kind, laps: kind === 'race' ? trackById(CFG.track).laps || 3 : 0, count: kind === 'race' || kind === 'battle' ? 3.99 : 0, order: [], done: false, rev: null };
     raceT = 0; results = 0; banked = false; revHold = 0;
     if (!unlocked(carById(CFG.car))) CFG.car = 'volta';
     if (roam) { roam.end(); roam = null; }
+    battle = null;
     showCar(specFor(CFG.car));
-    setLabels(kind === 'roam');
+    setLabels(kind);
     cockpit.setVisible(CFG.view === 'cockpit');
     if (kind === 'race') {
         // a full grid: the player starts in the middle, seven rivals around them
@@ -584,6 +594,16 @@ function startDrive(kind = race ? race.kind : 'race') {
             r++;
         }
         plan(track);
+    } else if (kind === 'battle') {
+        const g0 = track.gridSlot(0);
+        car.place(g0.x, g0.y, g0.z, g0.heading); car.lastGy = car.y;
+        const others = CARS.filter((c) => c.id !== CFG.car && !c.unlock);
+        for (let k = 1; k < 6; k++) {
+            const b = newCar(Object.assign({}, others[(k * 2) % others.length], { num: 10 + k * 7 }), track.gridSlot(k), false);
+            b.driver = null; b.botName = RIVALS[k - 1].name;
+            cars.push(b);
+        }
+        battle = new Battle(track, battleApi);
     } else if (kind === 'roam') {
         roam = new Roam(world, roamApi);
     } else if (kind === 'test' && CFG.targets) {
@@ -596,7 +616,7 @@ function startDrive(kind = race ? race.kind : 'race') {
             cars.push(b);
         }
     }
-    music.want(STATIONS[CFG.radio][0] || (SONGS[track.def.id] ? track.def.id : SONG_FOR[track.def.id] || 'race1'));
+    music.want(kind === 'roam' ? STATIONS[CFG.radio][0] || 'world' : track.def.song || (SONGS[track.def.id] ? track.def.id : SONG_FOR[track.def.id] || 'race1'));
     pickups = kind === 'trial' || kind === 'roam' ? null : new Pickups(track, scene);
     weapons = new Weapons(scene, track, fx);
     weapons.rank = rankCars;
@@ -632,16 +652,59 @@ function startRoam() {
     cup = null;
     startDrive('roam');
 }
+// battle mode: an arena swaps in for the track, the same way the world does
+let battle = null;
+const arenaCache = {};
+const arenaById = (id) => ARENAS.find((a) => a.id === id) || ARENAS[0];
+function startBattle(id) {
+    const def = arenaById(id);
+    CFG.arena = def.id; saveCfg();
+    const A = arenaCache[def.id] || (arenaCache[def.id] = buildArena(def, TX));
+    clearRace();
+    if (track) scene.remove(track.group);
+    track = A; trackDef = A.def;
+    scene.add(A.group);
+    const d = A.def;
+    scene.background = new THREE.Color(d.sky.top);
+    scene.fog = new THREE.Fog(d.fog, d.fogNear, d.fogFar);
+    sun.color.set(d.light.sun); sun.position.set(...d.light.dir); sunDir.copy(sun.position).normalize();
+    sunDisc.material.color.set(d.light.disc); sunDisc.visible = true;
+    hemi.color.set(d.light.amb); hemi.groundColor.set(d.light.ground); hemi.intensity = 2.4; sun.intensity = 3.2;
+    rain.setOn(!!d.flakes, d.flakes || 'rain'); rain.k = 1; drops.clear();
+    cup = null;
+    startDrive('battle');
+}
+const battleApi = {
+    get cars() { return cars; }, get car() { return car; }, audio, fx, message,
+    earn: (t, p) => earn(t, p), nameOf: (c) => nameOf(c), reset: (c) => resetCar(c),
+    fire: (c, back) => weapons.fire(c, back, cars),
+    items: () => (pickups ? pickups.items : []),
+    done: (order) => { setTimeout(() => { if (battle && mode === 'drive') showBattleResults(order); }, 2600); }
+};
+function showBattleResults(order) {
+    music.want('results');
+    ST.races++; if (order[0] === car) CFG.wins++;
+    $('#res-title').textContent = `battle · ${arenaById(CFG.arena).name.toLowerCase()}`;
+    $('#res-list').innerHTML = order.map((c, i) => `<li class="${c === car ? 'me' : ''}"><span>${i + 1}</span><b>${nameOf(c)}</b><i>${c.spec.name}</i><em>${c.out ? 'out' : `${c.balloons} left`} · ${c.pops} pop${c.pops === 1 ? '' : 's'}</em></li>`).join('');
+    $('#res-extra').innerHTML = '';
+    const unlocks = bankFans();
+    $('#res-fans').innerHTML = `Fans +${fans} · total ${CFG.fansTotal} <i class="heart">&#9829;</i>` + unlocks.map((u) => `<p class="unlock">New car unlocked: <b>${u.name}</b></p>`).join('');
+    $('#res-menu').innerHTML = [['restart', 'Battle again'], ['nextarena', 'Next arena'], ['quit', 'Menu']].map(([a, l]) => `<button type="button" data-act="${a}">${l}</button>`).join('');
+    show('results'); setMenu($('#res-menu'));
+    saveCfg(); setTimeout(checkAch, 400);
+}
 function leaveWorld() {
+    battle = null;
+    if (track && track.isArena) { loadTrack(trackById(CFG.track)); }
     if (roam) { roam.end(); roam = null; }
     if (track && track.isWorld) { rain.k = 1; rain.roamMode = null; rain.setOn(false); sunDisc.visible = true; loadTrack(trackById(CFG.track)); }
-    setLabels(false);
+    setLabels(null);
 }
-function setLabels(roaming) {
-    const p = $('.b-pos small'), t = $$('.b-time small');
-    p.textContent = roaming ? 'Ducks' : 'Position';
-    t[0].firstChild.textContent = roaming ? '' : 'Lap ';
-    t[1].firstChild.textContent = roaming ? '' : 'Best ';
+function setLabels(kind) {
+    const p = $('.b-pos small'), t = $$('.b-time small'), plain = kind !== 'roam' && kind !== 'battle';
+    p.textContent = kind === 'roam' ? 'Ducks' : kind === 'battle' ? 'Balloons' : 'Position';
+    t[0].firstChild.textContent = plain ? 'Lap ' : '';
+    t[1].firstChild.textContent = plain ? 'Best ' : '';
 }
 const roamApi = {
     scene, CFG, saveCfg, message, audio, fx, puff,
@@ -751,7 +814,7 @@ function finish(c) {
         results = 3;
     }
 }
-const nameOf = (c) => (c === car ? 'You' : c.driver ? c.driver.name : '—');
+const nameOf = (c) => (c === car ? 'You' : c.driver ? c.driver.name : c.botName || c.rivalName || '—');
 function bankFans() {
     if (banked) return [];
     banked = true;
@@ -762,7 +825,7 @@ function bankFans() {
 }
 function showResults() {
     race.showed = true;
-    music.want(STATIONS[CFG.radio][0] || 'results');
+    music.want('results');
     ST.races++;
     setTimeout(checkAch, 400);
     const order = [...race.order, ...rankCars().filter((c) => !c.done)];
@@ -952,11 +1015,11 @@ function updDrive(dt) {
     const ctx = { track, cars, weapons, rank: rankCars, player: car, pickups };
     for (const c of cars) {
         if (race && race.count > 0) { c.vx = c.vz = 0; c.w = 0; continue; }     // everyone waits for GO
-        if (c.npc && c.npc.far) continue;
-        const inp = c.npc ? roam.drive(c, cars) : c.driver ? c.driver.drive(ctx) : c === car ? readDrive() : botDrive(c);
+        if ((c.npc && c.npc.far) || c.out) continue;
+        const inp = c.bot ? battle.drive(c, dt) : c.npc ? roam.drive(c, cars) : c.driver ? c.driver.drive(ctx) : c === car ? readDrive() : botDrive(c);
         c.step(dt, inp);
         wallHit(c);
-        if (!roam) laps(c, dt);
+        if (!roam && !battle) laps(c, dt);
         if (track.boosts && track.boosts.length && c.wrecked <= 0) {
             for (const b of track.boosts) {
                 const d = ((c.q.i - b) % track.N + track.N) % track.N;
@@ -974,7 +1037,7 @@ function updDrive(dt) {
     }
     for (let i = 0; i < cars.length; i++) for (let j = i + 1; j < cars.length; j++) collide(cars[i], cars[j]);
     const fwd = Math.sin(car.h) * car.q.tx + Math.cos(car.h) * car.q.tz;
-    wrongWay = !roam && fwd < -0.3 && car.speed > 4 ? wrongWay + dt : 0;
+    wrongWay = !roam && !battle && fwd < -0.3 && car.speed > 4 ? wrongWay + dt : 0;
     if (car.scrape > 0.6 && !car.scrapeSnd) { audio.thud(car.scrape); car.scrapeSnd = true; }
     if (car.scrape < 0.1) car.scrapeSnd = false;
     if (!(race && race.count > 0) && !car.done) driving(dt);
@@ -1323,11 +1386,6 @@ function updNotes() {
         const callAt = Math.max(70, car.speed * 3.4);
         if (!o.called && d < callAt) {
             o.called = true;
-            if (CFG.codriver === 'voice' && CFG.sound && !o.silent) {
-                let text = o.say;
-                if (o.into) { const nx = notes[(o.id + 1) % notes.length]; text += ` into ${nx.say}`; nx.silent = true; }
-                codriver.say(text);
-            }
         }
     }
     for (const o of notes) { const d = (((o.i - p) % N) + N) % N * seg; if (d > 420) { o.called = false; o.silent = false; } }
@@ -1377,6 +1435,7 @@ function cardIcon(kind) {
     if (kind === 'controls') { x.beginPath(); x.roundRect(4, 14, 40, 22, 10); x.fill(); x.fillStyle = '#0a1830'; x.fillRect(11, 23, 10, 4); x.fillRect(14, 20, 4, 10); circle(33, 22, 2.5); circle(38, 27, 2.5); }
     if (kind === 'cup') { x.beginPath(); x.moveTo(12, 8); x.lineTo(36, 8); x.lineTo(33, 24); x.quadraticCurveTo(24, 32, 15, 24); x.closePath(); x.fill(); x.fillRect(22, 28, 4, 8); x.fillRect(15, 36, 18, 5); x.lineWidth = 3; x.beginPath(); x.arc(12, 14, 5, Math.PI * 0.5, Math.PI * 1.5); x.stroke(); x.beginPath(); x.arc(36, 14, 5, -Math.PI * 0.5, Math.PI * 0.5); x.stroke(); }
     if (kind === 'trial') { circle(24, 27, 16); x.fillRect(21, 5, 6, 6); x.fillStyle = '#0a1830'; circle(24, 27, 12); x.fillStyle = '#9ff0ff'; x.fillRect(23, 17, 2, 11); x.fillRect(23, 26, 8, 2); }
+    if (kind === 'battle') { for (const [cx, cy, r] of [[17, 17, 10], [31, 21, 9]]) { circle(cx, cy, r); } x.fillStyle = '#0a1830'; circle(14, 14, 3); circle(28, 18, 2.5); x.fillStyle = '#9ff0ff'; x.fillRect(16, 27, 2, 16); x.fillRect(30, 30, 2, 13); x.fillRect(14, 41, 20, 3); }
     if (kind === 'world') { circle(24, 24, 18); x.fillStyle = '#0a1830'; circle(24, 24, 15); x.fillStyle = '#9ff0ff'; x.beginPath(); x.moveTo(12, 14); x.lineTo(22, 12); x.lineTo(26, 20); x.lineTo(18, 26); x.lineTo(20, 34); x.lineTo(13, 30); x.fill(); x.beginPath(); x.moveTo(28, 28); x.lineTo(36, 24); x.lineTo(37, 34); x.lineTo(30, 37); x.fill(); }
     if (kind === 'home') { x.beginPath(); x.moveTo(24, 6); x.lineTo(44, 24); x.lineTo(4, 24); x.fill(); x.fillRect(10, 24, 28, 18); x.fillStyle = '#0a1830'; x.fillRect(20, 30, 8, 12); }
     return (iconCache[kind] = inkify(c));
@@ -1399,6 +1458,7 @@ function inkify(src) {
 }
 const MAIN_CARDS = [
     { label: 'race', icon: 'race', desc: 'Eight cars, three laps, every power-up', act: () => { cup = null; flow = 'race'; openCarousel('tracks'); } },
+    { label: 'battle', icon: 'battle', desc: 'Arenas, three balloons each, power-ups pop them: last car standing wins', act: () => { cup = null; flow = 'battle'; openCarousel('arenas'); } },
     { label: 'free roam', icon: 'world', desc: 'An open world: traffic, trains, rivals, hidden ducks, day and night', act: () => startRoam() },
     { label: 'cups', icon: 'cup', desc: 'Four races, points for every finish, a trophy at the end', act: () => openCarousel('cups') },
     { label: 'time trial', icon: 'trial', desc: 'Just you and the ghost of your best lap', act: () => { cup = null; flow = 'trial'; openCarousel('tracks'); } },
@@ -1417,7 +1477,23 @@ const cupCards = () => CUPS.map((c) => ({
 }));
 let carousel = { kind: 'main', items: MAIN_CARDS, sel: 0 };
 let flow = null;      // 'race', 'trial' or 'test' while picking a track and then a car
-const FLOWN = { race: 'Race', trial: 'Time trial', test: 'Test drive' }, FLOWC = { race: 'race', trial: 'time trial', test: 'test drive' };
+const FLOWN = { race: 'Race', trial: 'Time trial', test: 'Test drive', battle: 'Battle' }, FLOWC = { race: 'race', trial: 'time trial', test: 'test drive', battle: 'battle' };
+// the arena cards: a little inked plan of each one
+function arenaCards() {
+    return ARENAS.map((a) => ({
+        label: a.name.toLowerCase(), desc: title(a.blurb),
+        img: () => {
+            const c = document.createElement('canvas'); c.width = c.height = 48;
+            const x = c.getContext('2d'), sc = 19 / a.R;
+            x.fillStyle = '#9ff0ff'; x.beginPath(); if (a.shape === 'circle') x.arc(24, 24, a.R * sc, 0, Math.PI * 2); else x.rect(24 - a.R * sc, 24 - a.R * sc, a.R * 2 * sc, a.R * 2 * sc); x.fill();
+            x.fillStyle = '#0a1830';
+            for (const o of a.obstacles()) { if (o.hw) x.fillRect(24 + (o.x - o.hw) * sc, 24 + (o.z - o.hd) * sc, Math.max(1.5, o.hw * 2 * sc), Math.max(1.5, o.hd * 2 * sc)); else { x.beginPath(); x.arc(24 + o.x * sc, 24 + o.z * sc, Math.max(1.2, o.r * sc), 0, Math.PI * 2); x.fill(); } }
+            for (const [lx, lz, lr] of a.lava || []) { x.beginPath(); x.arc(24 + lx * sc, 24 + lz * sc, lr * sc, 0, Math.PI * 2); x.fill(); }
+            return inkify(c);
+        },
+        act: () => { CFG.arena = a.id; saveCfg(); openGarage(); }
+    }));
+}
 function trackCards() {
     return TRACKS.map((t) => ({
         label: t.name.toLowerCase(),
@@ -1479,14 +1555,14 @@ function openCarousel(kind, sel) {
     hideAll(); show('title');
     music.want('menu');
     mode = 'menu'; menu = null;
-    const items = kind === 'tracks' ? trackCards() : kind === 'cups' ? cupCards() : MAIN_CARDS;
+    const items = kind === 'tracks' ? trackCards() : kind === 'cups' ? cupCards() : kind === 'arenas' ? arenaCards() : MAIN_CARDS;
     const start = sel != null ? sel : kind === 'tracks' ? Math.max(0, TRACKS.indexOf(trackById(CFG.track))) : 0;
     carousel = { kind, items, sel: start };
     $('#carousel').innerHTML = items.map((it, i) => `<button type="button" class="bcard" data-card="${i}"><span class="ctag">${it.label}</span><img src="${it.img ? it.img() : cardIcon(it.icon)}" alt="">${it.badge ? `<em class="cbadge${it.badge === 'no time' ? ' none' : ''}">${it.badge}</em>` : ''}</button>`).join('');
     $('#m-back').hidden = kind === 'main';
-    if (kind !== 'tracks') flow = null;
-    const st = $('#m-step'); st.hidden = !(flow && kind === 'tracks');
-    if (!st.hidden) st.innerHTML = `${FLOWN[flow]} · step 1 of 2 · <b>pick a track</b>`;
+    if (kind === 'main' || kind === 'cups') flow = null;
+    const st = $('#m-step'); st.hidden = !(flow && (kind === 'tracks' || kind === 'arenas'));
+    if (!st.hidden) st.innerHTML = `${FLOWN[flow]} · step 1 of 2 · <b>pick ${kind === 'arenas' ? 'an arena' : 'a track'}</b>`;
     placeCards();
 }
 function placeCards() {
@@ -1528,7 +1604,7 @@ function openGarage() {
     mode = 'garage';
     hideAll(); show('garage'); setMenu(null);
     const st = $('#g-step'); st.hidden = !flow;
-    if (flow) st.innerHTML = `${FLOWN[flow]} · step 2 of 2 · <b>pick your car</b> · ${title(trackById(CFG.track).name)}`;
+    if (flow) st.innerHTML = `${FLOWN[flow]} · step 2 of 2 · <b>pick your car</b> · ${title(flow === 'battle' ? arenaById(CFG.arena).name : trackById(CFG.track).name)}`;
     gIdx = Math.max(0, CARS.indexOf(carById(CFG.car)));
     setCustom(false);
     garageShow();
@@ -1589,9 +1665,9 @@ function garageInput() {
     if (press('ok')) {
         if (!unlocked(s)) { audio.fx('block'); return; }
         CFG.car = s.id; saveCfg(); audio.fx('pickup');
-        if (flow) { const f = flow; flow = null; startDrive(f); } else openCarousel('main', cardIdx('garage'));
+        if (flow) { const f = flow; flow = null; if (f === 'battle') startBattle(CFG.arena); else startDrive(f); } else openCarousel('main', cardIdx('garage'));
     }
-    if (press('back')) { showCar(specFor(CFG.car)); if (flow) openCarousel('tracks'); else openCarousel('main', cardIdx('garage')); }
+    if (press('back')) { showCar(specFor(CFG.car)); if (flow) openCarousel(flow === 'battle' ? 'arenas' : 'tracks'); else openCarousel('main', cardIdx('garage')); }
 }
 $('#garage').addEventListener('click', (e) => {
     const a = e.target.closest('.g-arrow');
@@ -1660,7 +1736,7 @@ function syncOptions() {
     set('units', CFG.units === 'mph' ? 'MPH' : 'KM/H');
     set('refl', CFG.refl ? 'ON' : 'OFF');
     set('driftStyle', CFG.driftStyle === 'kart' ? 'KART' : 'RALLY');
-    set('codriver', { voice: 'VOICE', notes: 'ARROWS', off: 'OFF' }[CFG.codriver]);
+    set('codriver', { notes: 'ON', off: 'OFF' }[CFG.codriver]);
     set('radio', STATIONS[CFG.radio][1].split(' · ')[0]);
     $('.b-speed small').textContent = CFG.units === 'mph' ? 'mph' : 'km/h';
     set('weather', WXN[CFG.weather] || CFG.weather.toUpperCase());
@@ -1707,6 +1783,7 @@ const ACTS = {
     quit: () => toMenu(),
     cupnext: () => { cup.idx++; cupRace(); },
     replay: () => startReplay(),
+    nextarena: () => { const i = ARENAS.indexOf(arenaById(CFG.arena)); startBattle(ARENAS[(i + 1) % ARENAS.length].id); },
     cupdone: () => toMenu('cups'),
     custom: () => { if (mode === 'garage') setCustom(true); },
     cdone: () => setCustom(false),
@@ -1819,10 +1896,10 @@ function frame(now) {
         if (press('photo')) setPhoto(true);
         if (press('map')) { if (roam) setMap(true); else message('MAP IS FOR FREE ROAM', 1.2, true); }
     }
-    if (press('radio') && mode === 'drive') {
+    if (press('radio') && mode === 'drive' && roam) {
         CFG.radio = (CFG.radio + 1) % STATIONS.length; saveCfg();
         const [song, name] = STATIONS[CFG.radio];
-        music.want(song || (SONGS[track.def.id] ? track.def.id : SONG_FOR[track.def.id] || 'race1'));
+        music.want(song || 'world');
         toast(`♪ ${name}`); syncOptions();
     }
     if (mode === 'drive' && !paused && race && race.intro > 0 && (press('ok') || hits.has('fire'))) { hits.delete('fire'); hits.delete('ok'); endIntro(); }
@@ -1845,6 +1922,7 @@ function frame(now) {
             cars.forEach((c) => { c.sync(dt); if (!(c.npc && c.npc.far)) carFx(c); });
             if (CFG.view === "hood" && !(race && race.intro > 0)) { car.mesh.root.visible = false; if (shadow) shadow.visible = false; } else if (shadow) shadow.visible = true;
             if (roam) roam.frame(dt, roamIn);
+            if (battle && !(race && race.count > 0)) battle.frame(dt);
             updGhost();
             if (pickups) pickups.update(dt, T, cars, cam, (c, type) => { if (c === car) { audio.fx('pickup'); feed(`${title(PU[type].name)}`, 0); } });
             weapons.update(dt, cars, T);
@@ -1959,7 +2037,7 @@ window.RALLY = {
     scene, cam, CFG, keys, hits, syncOptions, startDrive, toMenu, openGarage,
     set override(f) { override = f; }, get car() { return car; }, get cars() { return cars; }, get track() { return track; }, get mode() { return mode; },
     get rec() { return rec; }, get ghost() { return ghost; }, get lapStarted() { return lapStarted; },
-    get race() { return race; }, get tape() { return tape; }, get replay() { return replay; }, startReplay, ST, checkAch, setMap, setPhoto, get drift() { return drift; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
+    get race() { return race; }, startBattle: (id) => startBattle(id), get battle() { return battle; }, get tape() { return tape; }, get replay() { return replay; }, startReplay, ST, checkAch, setMap, setPhoto, get drift() { return drift; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
     set gIdx(v) { gIdx = v; garageShow(); }, rankCars: () => rankCars(), showResults: () => showResults(),
     startRoam: () => startRoam(), audio, music, get world() { return world; }, get roam() { return roam; },
     give: (type, c = car) => { c.slots.push({ type, ammo: PU[type].ammo || 1 }); }, get weapons() { return weapons; }

@@ -285,9 +285,11 @@ export function makeCarMesh(spec) {
         root.add(pivot);
         wheels.push({ pivot, spin, front: z > 0 });
     }
-    // a hex-wire shield bubble, and nitro flames out of the exhaust (both drawn in the glow pass too)
-    const bubble = glows(new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#ffe23a', wireframe: true, fog: false })));
-    bubble.scale.set(1.5, 1.2, 2.7); bubble.position.y = 0.8; bubble.visible = false;
+    // the shield: a golden glow that hugs the car (drawn only in the glow pass, so it shows as a halo),
+    // and nitro flames out of the exhaust
+    const bubble = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), new THREE.MeshBasicMaterial({ color: '#ffe23a', fog: false }));
+    bubble.scale.set(B.width * 0.7, 1.0, B.len * 0.6); bubble.position.y = 0.75; bubble.visible = false;
+    bubble.layers.set(GLOW); bubble.userData.base = bubble.scale.clone();
     body.add(bubble);
     const flames = new THREE.Group();
     for (const sx of [-0.45, 0.45]) {
@@ -573,7 +575,13 @@ export class Car {
         m.root.rotation.x = this.pitch;
         m.body.rotation.z = this.roll + this.flip;
         m.bubble.visible = this.shield > 0;
-        if (this.shield > 0) { m.bubble.rotation.y += (dt || 0) * 1.5; m.bubble.visible = this.shield > 2 || Math.floor(this.shield * 8) % 2 === 0; }
+        if (this.shield > 0) {
+            // a slow breathing pulse; it flickers as the shield runs out
+            const t = performance.now() / 1000, k = 1 + Math.sin(t * 5) * 0.06;
+            m.bubble.scale.copy(m.bubble.userData.base).multiplyScalar(k);
+            m.bubble.material.color.set('#ffe23a').multiplyScalar(0.7 + 0.3 * Math.sin(t * 7));
+            m.bubble.visible = this.shield > 2 || Math.floor(this.shield * 8) % 2 === 0;
+        }
         m.flames.visible = this.nitro > 0;
         this.auraT = Math.max(0, (this.auraT || 0) - (dt || 0));
         const auraOn = this.auraT > 0 || this.nitro > 0;

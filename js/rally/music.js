@@ -234,6 +234,44 @@ export const SONGS = {
         arp: '0120212001202120', arpOct: 24, arpType: 'marimba',
         mel: '0.2.4.4.5.4.2...0.2.4.2.1.......', melType: 'bell', scale: 'major', tonic: 72
     },
+    // --- battle arenas ---
+    // Colosseum: war drums and brass fanfares
+    colosseum: {
+        bpm: 132, key: K.gmin, barsPerChord: 1, kit: 'big',
+        kick: 'x.....x.x.......', clap: '....x.......x...', tom: 'l.l.m...l.l.h.hh', hat: '',
+        bass: 'x.....x.x...o...', bassType: 'sub',
+        stab: 'x.....x.....x.x.', stabType: 'brass',
+        mel: '0...2.3.4...3.2.0.......4.5.4...', melType: 'brass', scale: 'minor', tonic: 67
+    },
+    // Container Yard: dark, slow hip hop with a growling bass
+    yard: {
+        bpm: 90, key: K.harb, barsPerChord: 2, kit: 'electro', swing: 0.18,
+        kick: 'x......x..x.....', snare: '....x.......x...', hat: 'x.x.x.x.xxx.x.x.',
+        bass: 'x.......x..x....', bassType: 'reese', filter: 700, pad: true,
+        arp: '0.......2.......', arpOct: 24, arpType: 'bell'
+    },
+    // Skate Park: fast ska punk, offbeat organ chops
+    skate: {
+        bpm: 180, key: K.amaj, barsPerChord: 1, kit: 'rock',
+        kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        bass: 'x.3.5.3.x.3.5.o.', bassType: 'pluck', filter: 1200,
+        stab: '..x...x...x...x.', stabType: 'organ'
+    },
+    // Lava Crater: a metal chug and a screaming lead
+    crater: {
+        bpm: 150, key: K.phryg, barsPerChord: 1, kit: 'industrial',
+        kick: 'xx..xx..xx..x.x.', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        bass: 'xxx.xxx.xx.xxx.x', bassType: 'dist', filter: 2400,
+        mel: '0.1.0...4.3.1.0.................', melType: 'saw', scale: 'hijaz', tonic: 64
+    },
+    // Ice Rink: bright synth pop with bells
+    rink: {
+        bpm: 120, key: K.dmaj, barsPerChord: 1, kit: 'electro',
+        kick: 'x...x...x...x...', clap: '....x.......x...', hat: '..x...x...x...x.',
+        bass: 'x.x.o.x.x.x.o.x.', bassType: 'saw', filter: 1300, pad: true,
+        arp: '0120012001200120', arpOct: 24, arpType: 'bell',
+        mel: '4...2.0.2.4.....5...4.2.4.......', melType: 'square', scale: 'major', tonic: 74
+    },
     // Free roam: street funk, slap bass, clav and horn hits
     world: {
         bpm: 104, key: K.funk, barsPerChord: 1, kit: 'electro', swing: 0.12,
