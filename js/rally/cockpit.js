@@ -123,6 +123,7 @@ export class Cockpit {
         this.group.visible = on;
         this.car.mesh.cabin.visible = !on;
         this.car.mesh.shell.visible = !on;
+        if (this.car.mesh.trim) this.car.mesh.trim.visible = !on;
         this.car.mesh.hood.visible = on;
         this.car.mesh.headStars.forEach((s) => { s.visible = !on; });
         (this.car.mesh.beams || []).forEach((b) => { b.visible = !on; });

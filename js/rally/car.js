@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { cel, glows, GLOW, reflective } from './retro.js';
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 
 // Side profiles as [z, y] (front is +z). Fictional cars, no real brands.
 // tail: height of the rear lamps; spoiler: [z, y] or null.
@@ -180,6 +181,27 @@ export function makeCarMesh(spec) {
         g.computeVertexNormals();
         return new THREE.Mesh(g, m);
     };
+    const sculpt = (pts, width, m, o = {}) => {
+        const P = [], sub = o.sub || 3;
+        for (let i = 0; i < pts.length; i++) {
+            const a = pts[i], b = pts[(i + 1) % pts.length];
+            for (let k = 0; k < sub; k++) P.push([a[0] + (b[0] - a[0]) * k / sub, a[1] + (b[1] - a[1]) * k / sub]);
+        }
+        const bev = o.bevel == null ? 0.07 : o.bevel, depth = Math.max(0.1, width - bev * 2);
+        const g = new THREE.ExtrudeGeometry(new THREE.Shape(P.map(([z, y]) => new THREE.Vector2(-z, y))), { depth, bevelEnabled: bev > 0, bevelThickness: bev, bevelSize: bev * 0.8, bevelSegments: 2, curveSegments: 1 });
+        g.rotateY(Math.PI / 2); g.translate(-depth / 2, 0, 0);
+        const p = g.attributes.position, L = B.len / 2;
+        for (let i = 0; i < p.count; i++) {
+            const y = p.getY(i), z = p.getZ(i);
+            const lean = 1 - (o.tumble || 0) * smooth(o.belt || 0.8, o.top || 1.2, y);         // tumblehome
+            const ends = 1 - (o.taper || 0) * smooth(L - (o.round || 0.8), L + 0.1, Math.abs(z)) ** 1.4;   // rounded nose and tail
+            const sill = 1 - (o.tuck || 0) * smooth(0.5, 0.28, y);                                 // sills tucked in
+            p.setX(i, p.getX(i) * lean * ends * sill);
+        }
+        g.computeVertexNormals();
+        return new THREE.Mesh(g, m);
+    };
+    const fancy = !B.saucer && !['couch', 'duck'].includes(spec.type);
     const paint = reflective(mat({ color: spec.body, flatShading: true }), 0.5);
     const stripe = reflective(mat({ color: spec.stripe, flatShading: true }), 0.4);
     const glass = reflective(mat({ color: spec.glass || '#3a4a58', emissive: '#0a1016', flatShading: true }), 0.95);
@@ -189,7 +211,8 @@ export function makeCarMesh(spec) {
         // a flying saucer: a lens turned on a lathe, not an extruded side profile
         const prof = [[0, 0.32], [1.2, 0.36], [1.8, 0.55], [1.2, 0.85], [0.6, 0.92], [0, 0.94]].map(([r, y]) => new THREE.Vector2(r, y));
         shell = new THREE.Mesh(new THREE.LatheGeometry(prof, 16), paint);
-    } else shell = extrude(B.body, B.width, paint);
+    } else if (fancy) shell = sculpt(B.body, B.width, paint, { tumble: 0.1, belt: Math.max(B.head, B.tail) + 0.04, top: 1.3, taper: 0.2, round: 0.75, tuck: 0.06 });
+    else shell = extrude(B.body, B.width, paint);
     body.add(shell);
     // from the driver's seat only the bonnet ahead of the windscreen should show, not the whole shell
     const front = B.body.filter(([z]) => z >= B.cabin[0][0]);
@@ -201,17 +224,32 @@ export function makeCarMesh(spec) {
     if (B.saucer) {
         const dome = new THREE.Mesh(new THREE.SphereGeometry(0.75, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2), glass);
         dome.position.y = 0.9; cabin.add(dome);
-    } else cabin.add(extrude(B.cabin.concat([[B.cabin[B.cabin.length - 1][0], 0.98], [B.cabin[0][0], 0.98]]), B.width - 0.22, glass));
+    } else {
+        const cpts = B.cabin.concat([[B.cabin[B.cabin.length - 1][0], 0.96], [B.cabin[0][0], 0.96]]);
+        cabin.add(fancy ? sculpt(cpts, B.width - 0.2, glass, { bevel: 0.05, tumble: 0.22, belt: 0.98, top: B.roof[2], sub: 2 }) : extrude(cpts, B.width - 0.22, glass));
+    }
     const [rf, rr, ry] = B.roof;
-    const roof = new THREE.Mesh(new THREE.BoxGeometry(B.width - 0.2, 0.06, rf - rr), stripe);
-    roof.position.set(0, ry + 0.02, (rf + rr) / 2);
+    const cw = fancy ? (B.width - 0.2) * 0.78 : B.width - 0.2;       // the cabin is narrower at the top
+    const roof = new THREE.Mesh(new THREE.BoxGeometry(cw, 0.07, Math.max(0.2, rf - rr)), stripe);
+    roof.position.set(0, ry + 0.03, (rf + rr) / 2);
     if (!B.saucer) cabin.add(roof);
-    // pillars so the glass reads as windows
-    if (!B.saucer) for (const sx of [-1, 1]) {
-        const ph = ry - 0.98, pz = (rf + rr) / 2;
-        const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, ph, 0.12), paint);
-        p.position.set(sx * (B.width / 2 - 0.13), 0.98 + ph / 2, pz);
-        cabin.add(p);
+    // black window frames: A, B and C pillars following the cabin's lean, and a line along the sill
+    const trimM = mat({ color: '#141418', flatShading: true });
+    const strut = (a, b, t, m, parent) => {
+        const v = new THREE.Vector3(b[0] - a[0], b[1] - a[1], b[2] - a[2]), len = v.length();
+        const s = new THREE.Mesh(new THREE.BoxGeometry(t, t, len), m);
+        s.position.set((a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2);
+        s.lookAt(s.position.clone().add(v)); parent.add(s); return s;
+    };
+    if (!B.saucer) {
+        const c = B.cabin, base = (B.width - 0.2) / 2, top = cw / 2, n = c.length;
+        for (const sx of [-1, 1]) {
+            strut([sx * base, c[0][1], c[0][0]], [sx * top, c[1][1], c[1][0]], 0.09, trimM, cabin);                    // A
+            strut([sx * top, c[n - 2][1], c[n - 2][0]], [sx * base, c[n - 1][1], c[n - 1][0]], 0.09, trimM, cabin);    // C
+            const bz = (c[1][0] + c[n - 2][0]) / 2;
+            if (c[1][0] - c[n - 2][0] > 1.2) strut([sx * base, 0.98, bz], [sx * top, ry, bz], 0.08, trimM, cabin);    // B
+            strut([sx * (base + 0.01), 0.99, c[0][0]], [sx * (base + 0.01), 0.99, c[n - 1][0]], 0.06, trimM, cabin); // sill line
+        }
     }
     const hoodStripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 1.3), stripe);
     const hz = (B.cabin[0][0] + B.body[2][0]) / 2, hy = (B.cabin[0][1] + B.body[2][1]) / 2;
@@ -269,16 +307,79 @@ export function makeCarMesh(spec) {
         }
     }
     EXTRAS[spec.type] && EXTRAS[spec.type](body, cabin, { paint, stripe, glass, dark }, B, spec);
+    const trim = new THREE.Group();
+    body.add(trim);
+    if (fancy) {
+        const chrome = reflective(mat({ color: '#c8ccd2', flatShading: true }), 0.9);
+        const box = (w, h, d, m, x, y, z, parent = trim) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); parent.add(b); return b; };
+        const zf = B.len / 2, zb = -B.len / 2, hw = B.width / 2, lx = hw - 0.3;
+        const ww = B.wheelW || 0.26;
+        // wheel arches: a dark well behind the tyre and a flare of paint over it
+        for (const z of B.wb) for (const sx of [-1, 1]) {
+            const well = new THREE.Mesh(new THREE.CircleGeometry(B.wheelR + 0.1, 12, 0, Math.PI), trimM);
+            well.position.set(sx * (hw * 0.94 + 0.005), B.wheelR, z); well.rotation.y = sx * Math.PI / 2; trim.add(well);
+            const flare = new THREE.Mesh(new THREE.TorusGeometry(B.wheelR + 0.1, 0.06, 4, 10, Math.PI), paint);
+            flare.position.set(sx * (hw * 0.94 + 0.02), B.wheelR, z); flare.rotation.y = sx * Math.PI / 2; trim.add(flare);
+            box(0.03, 0.26, 0.2, trimM, sx * (hw - 0.25), 0.36, z - B.wheelR - 0.18);                         // mud flap
+        }
+        // the front: lamps in housings, a grille with chrome bars, a splitter, fog lamps
+        for (const sx of [-1, 1]) {
+            box(0.42, 0.18, 0.08, trimM, sx * (lx - 0.02), B.head, zf - 0.04);
+            box(0.42, 0.22, 0.08, trimM, sx * lx, B.tail, zb + 0.04);
+            const fog = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 0.04, 8), mat({ color: '#ffe28a', emissive: '#4a3a10' }));
+            fog.rotation.x = Math.PI / 2; fog.position.set(sx * (hw - 0.45), 0.42, zf + 0.04); trim.add(fog);
+        }
+        const gw = B.width - 1.1;
+        if (gw > 0.2) {
+            box(gw, 0.2, 0.05, trimM, 0, B.head - 0.02, zf + 0.0);
+            for (let k = 0; k < 3; k++) box(gw, 0.02, 0.02, chrome, 0, B.head - 0.08 + k * 0.06, zf + 0.03);
+        }
+        box(B.width - 0.2, 0.05, 0.22, trimM, 0, 0.29, zf - 0.02);                                            // splitter
+        box(B.width - 0.5, 0.12, 0.16, trimM, 0, 0.32, zb + 0.06);                                            // diffuser
+        for (const sx of [-0.35, 0.35]) {                                                                     // exhausts
+            const ex = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.22, 8), chrome);
+            ex.rotation.x = Math.PI / 2; ex.position.set(sx, 0.33, zb - 0.02); trim.add(ex);
+        }
+        // the sides: skirts, door seams and handles, mirrors
+        const doorF = B.cabin[0][0] - 0.05, doorB = B.cabin[B.cabin.length - 1][0] + 0.25;
+        for (const sx of [-1, 1]) {
+            const side = sx * (hw * 0.94 + 0.012);
+            box(0.04, 0.08, Math.abs(B.wb[0] - B.wb[1]) - B.wheelR * 2 - 0.3, trimM, side, 0.33, (B.wb[0] + B.wb[1]) / 2);
+            for (const z of [doorF, (doorF + doorB) / 2, doorB]) if (z < B.wb[0] - B.wheelR && z > B.wb[1] + B.wheelR) box(0.012, 0.46, 0.02, trimM, side, 0.72, z);
+            box(0.03, 0.03, 0.12, chrome, side, 0.86, doorF - 0.32);
+            const mz = B.cabin[0][0] - 0.12, my = B.cabin[0][1] + 0.08;
+            box(0.18, 0.03, 0.04, trimM, sx * (hw - 0.02), my, mz);
+            box(0.06, 0.12, 0.16, paint, sx * (hw + 0.08), my + 0.02, mz);
+        }
+        // the top: an aerial, and a scoop for the cars that would have one
+        const aer = box(0.02, 0.5, 0.02, trimM, -cw / 2 + 0.1, ry + 0.27, rr + 0.1, cabin);
+        aer.rotation.x = -0.25;
+        if (['muscle', 'supercar', 'pickup', 'monster'].includes(spec.type)) {
+            const hz = (B.cabin[0][0] + B.body[2][0]) / 2, hy = (B.cabin[0][1] + B.body[2][1]) / 2;
+            const sc = box(0.6, 0.12, 0.7, paint, 0, hy + 0.06, hz); box(0.5, 0.08, 0.02, trimM, 0, hy + 0.08, hz + 0.36);
+            sc.rotation.x = Math.atan2(B.cabin[0][1] - B.body[2][1], B.body[2][0] - B.cabin[0][0]);
+        } else if (['hatch', 'saloon', 'coupe', 'kei'].includes(spec.type)) {
+            box(0.5, 0.09, 0.4, paint, 0, ry + 0.1, rf - 0.3, cabin); box(0.4, 0.06, 0.02, trimM, 0, ry + 0.1, rf - 0.09, cabin);
+        }
+    }
     // wheels
     const wheels = [];
     const ww = B.wheelW || 0.26;
-    const tyre = new THREE.CylinderGeometry(B.wheelR, B.wheelR, ww, 10); tyre.rotateZ(Math.PI / 2);
-    const hub = new THREE.CylinderGeometry(B.wheelR * 0.55, B.wheelR * 0.55, ww + 0.02, 6); hub.rotateZ(Math.PI / 2);
-    const tm = mat({ color: '#18181a', flatShading: true }), hm = mat({ color: spec.rims || '#a4a8b0', flatShading: true });
+    const tyre = new THREE.CylinderGeometry(B.wheelR, B.wheelR, ww, 16); tyre.rotateZ(Math.PI / 2);
+    const wall = new THREE.CylinderGeometry(B.wheelR * 0.94, B.wheelR * 0.94, ww + 0.02, 16); wall.rotateZ(Math.PI / 2);
+    const hub = new THREE.CylinderGeometry(B.wheelR * 0.62, B.wheelR * 0.62, ww + 0.03, 12); hub.rotateZ(Math.PI / 2);
+    const spokeG = new THREE.BoxGeometry(0.03, B.wheelR * 1.1, 0.07);
+    const capG = new THREE.CylinderGeometry(B.wheelR * 0.16, B.wheelR * 0.16, 0.04, 8); capG.rotateZ(Math.PI / 2);
+    const tm = mat({ color: '#18181a', flatShading: true }), wm = mat({ color: '#26262a', flatShading: true });
+    const hm = reflective(mat({ color: spec.rims || '#a4a8b0', flatShading: true }), 0.7), innerM = mat({ color: '#3a3c40', flatShading: true });
     for (const z of B.wb) for (const sx of [-1, 1]) {
         const pivot = new THREE.Group();     // steering
         const spin = new THREE.Group();      // rolling
-        spin.add(new THREE.Mesh(tyre, tm), new THREE.Mesh(hub, hm));
+        spin.add(new THREE.Mesh(tyre, tm), new THREE.Mesh(wall, wm), new THREE.Mesh(hub, innerM));
+        // five spokes and a cap on the outside face
+        const face = sx * (ww / 2 + 0.02);
+        for (let k = 0; k < 5; k++) { const s = new THREE.Mesh(spokeG, hm); s.position.x = face; s.rotation.x = k / 5 * Math.PI; spin.add(s); }
+        const cap = new THREE.Mesh(capG, hm); cap.position.x = face + sx * 0.01; spin.add(cap);
         pivot.add(spin);
         pivot.position.set(sx * (B.width / 2 - 0.1 + (B.wheelW ? ww / 2 : 0)), B.wheelR, z);
         pivot.visible = !B.hideWheels;
@@ -311,7 +412,7 @@ export function makeCarMesh(spec) {
     }
     body.position.y = B.lift || 0;
     body.add(aura);
-    return { root, body, cabin, shell, hood, wheels, B, tail, headStars, bubble, flames, aura };
+    return { root, body, cabin, shell, hood, trim, wheels, B, tail, headStars, bubble, flames, aura };
 }
 
 /* ---------- handling ---------- */
