@@ -53,6 +53,38 @@ export class CarAudio {
         const g = c.createGain(); g.gain.setValueAtTime(0.35, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.45);
         s.connect(f); f.connect(g); g.connect(this.master); s.start(t); s.stop(t + 0.5);
     }
+    // one-shot effects: a tone sweep and/or a filtered noise burst
+    fx(name) {
+        if (!this.ctx || !this.on) return;
+        const c = this.ctx, t = c.currentTime;
+        const tone = (type, f0, f1, dur, vol, delay = 0) => {
+            const o = c.createOscillator(), g = c.createGain(); o.type = type;
+            o.frequency.setValueAtTime(f0, t + delay); if (f1) o.frequency.exponentialRampToValueAtTime(f1, t + delay + dur);
+            g.gain.setValueAtTime(vol, t + delay); g.gain.exponentialRampToValueAtTime(0.001, t + delay + dur);
+            o.connect(g); g.connect(this.master); o.start(t + delay); o.stop(t + delay + dur + 0.02);
+        };
+        const hiss = (type, f0, f1, dur, vol, delay = 0) => {
+            const s = c.createBufferSource(); s.buffer = this.buf; s.loop = true;
+            const f = c.createBiquadFilter(); f.type = type; f.frequency.setValueAtTime(f0, t + delay); if (f1) f.frequency.exponentialRampToValueAtTime(f1, t + delay + dur);
+            const g = c.createGain(); g.gain.setValueAtTime(vol, t + delay); g.gain.exponentialRampToValueAtTime(0.001, t + delay + dur);
+            s.connect(f); f.connect(g); g.connect(this.master); s.start(t + delay); s.stop(t + delay + dur + 0.02);
+        };
+        const N = {
+            zap: () => { tone('square', 1800, 180, 0.25, 0.09); hiss('highpass', 3000, 0, 0.2, 0.2); },
+            whoosh: () => { hiss('bandpass', 400, 2400, 0.6, 0.3); tone('sine', 300, 900, 0.5, 0.06); },
+            boom: () => { hiss('lowpass', 1200, 60, 0.7, 0.6); tone('sine', 140, 35, 0.5, 0.35); },
+            pickup: () => [660, 880, 1320].forEach((f, i) => tone('square', f, 0, 0.08, 0.06, i * 0.05)),
+            shield: () => { tone('sine', 300, 1200, 0.5, 0.12); tone('triangle', 600, 2400, 0.4, 0.05, 0.05); },
+            block: () => { tone('square', 1400, 700, 0.15, 0.08); hiss('highpass', 4000, 0, 0.12, 0.2); },
+            pulse: () => { tone('sine', 90, 30, 0.6, 0.4); hiss('lowpass', 2000, 100, 0.5, 0.35); },
+            nitro: () => { hiss('lowpass', 300, 4000, 1.1, 0.35); tone('sawtooth', 80, 240, 1.0, 0.06); },
+            patch: () => [523, 659, 784, 1047].forEach((f, i) => tone('triangle', f, 0, 0.12, 0.08, i * 0.06)),
+            drop: () => { tone('square', 220, 110, 0.12, 0.08); },
+            wreck: () => { hiss('lowpass', 1600, 50, 1.4, 0.7); tone('sine', 110, 25, 1.2, 0.4); },
+            hit: () => { hiss('bandpass', 900, 300, 0.25, 0.4); tone('square', 200, 80, 0.2, 0.08); }
+        };
+        if (N[name]) N[name]();
+    }
     thud(k = 1) {
         if (!this.ctx || !this.on) return;
         const c = this.ctx, t = c.currentTime;

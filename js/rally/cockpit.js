@@ -64,6 +64,7 @@ export class Cockpit {
         column.rotation.x = -0.45;    // tilt towards the driver
         column.add(wheel);
         g.add(column);
+        [dash, gm, this.needle, column].forEach((o) => { o.visible = false; });
 
         // rear-view mirror with a live render behind the car
         this.rt = new THREE.WebGLRenderTarget(96, 28, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter });
@@ -131,10 +132,10 @@ export class Cockpit {
         const b = this.car.mesh.body;
         b.updateWorldMatrix(true, false);
         cam.position.copy(EYE).applyMatrix4(b.matrixWorld);
-        const look = this.tmp.set(EYE.x, EYE.y - 0.3, 14).applyMatrix4(b.matrixWorld);
+        const look = this.tmp.set(EYE.x, EYE.y - 0.12, 14).applyMatrix4(b.matrixWorld);
         cam.up.set(0, 1, 0);
         cam.lookAt(look);
-        cam.fov = 66 + Math.min(8, this.car.speed * 0.12);
+        cam.fov = 62 + Math.min(8, this.car.speed * 0.12);
         cam.updateProjectionMatrix();
     }
     update(dt, rain) {
@@ -177,6 +178,67 @@ export class Cockpit {
             const v = new THREE.Vector3(...GLASS[k]).applyMatrix4(b).project(cam);
             return [v.x * 0.5 + 0.5, 0.5 - v.y * 0.5];
         });
+    }
+    /* A flat pixel-art dashboard over the bottom of the view, like an arcade cockpit:
+       speedometer and rev counter with sweeping needles, a big gear digit, warning lights, the wheel. */
+    drawDash(x, W, H, o) {
+        x.clearRect(0, 0, W, H);
+        x.imageSmoothingEnabled = false;
+        const ink = '#07090c';
+        // dashboard silhouette with a hump over the gauges
+        x.beginPath();
+        x.moveTo(0, H); x.lineTo(0, 146); x.lineTo(70, 136); x.lineTo(96, 122); x.lineTo(224, 122); x.lineTo(250, 136); x.lineTo(W, 146); x.lineTo(W, H); x.closePath();
+        x.fillStyle = '#171a20'; x.fill();
+        x.lineWidth = 2; x.strokeStyle = ink; x.stroke();
+        x.fillStyle = '#2a3139'; x.fillRect(98, 123, 124, 2); x.fillRect(4, 146, 64, 1); x.fillRect(252, 146, 64, 1);
+        // a gauge: dark face, ticks, a needle that sweeps from bottom-left to bottom-right
+        const gauge = (cx, cy, r, v, max, label, red) => {
+            x.fillStyle = ink; x.beginPath(); x.arc(cx, cy, r + 3, 0, Math.PI * 2); x.fill();
+            x.fillStyle = '#2e353e'; x.beginPath(); x.arc(cx, cy, r + 1, 0, Math.PI * 2); x.fill();
+            x.fillStyle = '#0b0e12'; x.beginPath(); x.arc(cx, cy, r - 1, 0, Math.PI * 2); x.fill();
+            const a0 = Math.PI * 0.75, a1 = Math.PI * 2.25;
+            for (let k = 0; k <= 12; k++) {
+                const a = a0 + (a1 - a0) * (k / 12);
+                const hot = red && k >= 10;
+                x.fillStyle = hot ? '#ff3a6e' : '#3ad0ff';
+                const r0 = r - (k % 2 ? 4 : 6);
+                for (let d = r0; d < r - 2; d++) x.fillRect(Math.round(cx + Math.cos(a) * d), Math.round(cy + Math.sin(a) * d), 1, 1);
+            }
+            x.fillStyle = '#6fa39a'; x.font = '8px Silkscreen, monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
+            x.fillText(label, cx, cy + r * 0.45);
+            const a = a0 + (a1 - a0) * Math.max(0, Math.min(1, v / max));
+            x.strokeStyle = '#ffe23a'; x.lineWidth = 2;
+            x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(a) * (r - 5), cy + Math.sin(a) * (r - 5)); x.stroke();
+            x.fillStyle = '#ff3a6e'; x.fillRect(cx - 2, cy - 2, 4, 4);
+        };
+        gauge(126, 150, 25, o.kmh, 240, 'KM/H', false);
+        gauge(194, 150, 25, o.rpm, 1, 'RPM', true);
+        // digital speed and gear
+        x.fillStyle = ink; x.fillRect(146, 128, 28, 26);
+        x.fillStyle = '#0b0e12'; x.fillRect(148, 130, 24, 22);
+        x.fillStyle = '#ffe23a'; x.font = '16px Silkscreen, monospace'; x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.fillText(o.gear, 160, 142);
+        x.fillStyle = '#dde2e5'; x.font = '8px Silkscreen, monospace';
+        x.fillText(String(Math.round(o.kmh)).padStart(3, '0'), 126, 168);
+        // warning lights
+        const lamp = (lx, on, col) => { x.fillStyle = ink; x.fillRect(lx - 1, 126, 8, 6); x.fillStyle = on ? col : '#22282f'; x.fillRect(lx, 127, 6, 4); };
+        lamp(102, o.nitro, '#4aff7a'); lamp(112, o.shield, '#ffe23a'); lamp(206, o.damaged, '#ff3a6e'); lamp(216, o.brake, '#ff9a3a');
+        // the steering wheel, mostly below the screen, turning with the input
+        x.save();
+        x.translate(160, 252);
+        x.rotate(o.steer * 2.1);
+        const R = 80;
+        x.lineWidth = 13; x.strokeStyle = ink; x.beginPath(); x.arc(0, 0, R, 0, Math.PI * 2); x.stroke();
+        x.lineWidth = 9; x.strokeStyle = '#22262c'; x.beginPath(); x.arc(0, 0, R, 0, Math.PI * 2); x.stroke();
+        x.lineWidth = 9; x.strokeStyle = '#30353c';
+        for (const a of [-2.4, -0.74]) { x.beginPath(); x.arc(0, 0, R, a, a + 0.5); x.stroke(); }    // grips
+        x.lineWidth = 2; x.strokeStyle = '#3e454e'; x.beginPath(); x.arc(0, 0, R - 3, Math.PI * 1.1, Math.PI * 1.9); x.stroke();
+        x.fillStyle = '#ff3a6e'; x.fillRect(-3, -R - 4, 6, 8);                                         // top marker
+        x.fillStyle = ink;
+        for (const a of [Math.PI * 0.85, Math.PI * 0.15]) { x.save(); x.rotate(a); x.fillRect(0, -6, R, 12); x.restore(); }
+        x.fillStyle = '#22262c';
+        for (const a of [Math.PI * 0.85, Math.PI * 0.15]) { x.save(); x.rotate(a); x.fillRect(4, -4, R - 6, 8); x.restore(); }
+        x.restore();
     }
     renderMirror(renderer, scene) {
         const b = this.car.mesh.body;

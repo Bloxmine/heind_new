@@ -47,6 +47,8 @@ uniform sampler2D tGlow;
 uniform sampler2D tDrops;
 uniform float uDropsOn;
 uniform float uRain, uRainSlant;
+uniform vec3 uTint;
+uniform float uTintK;
 uniform float uGlow;
 uniform vec3 uPal[40];
 uniform int uN;
@@ -84,6 +86,8 @@ void main() {
     float gm = max(gw.r, max(gw.g, gw.b));
     float gq = floor(gm * 3.0 + 0.1) / 3.0;
     g += (gm > 0.002 ? gw / gm * gq : vec3(0.0)) * uGlow;
+    // a power-up's colour washes in from the screen edges when it fires
+    if (uTintK > 0.01) g = mix(g, uTint, uTintK * smoothstep(0.42, 0.9, length(vg) * 1.5));
     if (wet > 0.2) {
         g = g * 1.06 + 0.03;
         if (dn.y < -0.35 && dn.x < -0.1) g += 0.3;      // a glint on the top-left of each drop
@@ -144,7 +148,7 @@ void main() {
         float r0 = mix(1.05, 0.42, uSpeed) + h2 * 0.28;
         float w = 0.12 + 0.3 * smoothstep(r0, r0 + 0.5, r);
         float on = step(1.0 - uSpeed * 0.5, h) * step(r0, r) * step(abs(f - 0.5), w);
-        c = mix(c, uLine, on);
+        c = mix(c, mix(uLine, uTint * 255.0, min(1.0, uTintK * 1.6)), on);
         // a burst (big landing, boost) adds heavy black focus lines
         float rb = mix(0.9, 0.3, uBurst) + h * 0.2;
         float onb = step(1.0 - uBurst * 0.6, h2) * step(rb, r) * step(abs(f - 0.5), 0.1 + 0.35 * smoothstep(rb, rb + 0.4, r));
@@ -167,7 +171,7 @@ export class Post {
                 uRes: { value: new THREE.Vector2(RES.w, RES.h) }, uNear: { value: 0.3 }, uFar: { value: 1500 },
                 uInkOn: { value: 1 }, uInk: { value: new THREE.Vector3(17, 18, 26) }, uLine: { value: new THREE.Vector3(255, 255, 255) },
                 uSpeed: { value: 0 }, uTime: { value: 0 }, uBurst: { value: 0 },
-                uSat: { value: 1 }, uCon: { value: 1 }, uVig: { value: 0 }, tGlow: { value: null }, uGlow: { value: 1.0 }, tDrops: { value: null }, uDropsOn: { value: 0 }, uRain: { value: 0 }, uRainSlant: { value: 0.18 },
+                uSat: { value: 1 }, uCon: { value: 1 }, uVig: { value: 0 }, tGlow: { value: null }, uGlow: { value: 1.0 }, tDrops: { value: null }, uDropsOn: { value: 0 }, uRain: { value: 0 }, uRainSlant: { value: 0.18 }, uTint: { value: new THREE.Vector3(1, 1, 1) }, uTintK: { value: 0 },
                 uShadow: { value: new THREE.Vector3(1, 1, 1) }, uHigh: { value: new THREE.Vector3(1, 1, 1) }
             },
             vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -201,13 +205,29 @@ export class Post {
         this.glowOn = true;
         this.clearBlack = new THREE.Color(0x000000);
     }
+    // a small picture-in-picture (the rear-view mirror), mirrored left to right, at the top centre
+    setInset(tex, on) {
+        if (!this.inset) {
+            this.inset = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ depthTest: false, side: THREE.DoubleSide }));
+            this.inset.renderOrder = 2;
+            const w = 69 / RES.w, top = 1 - 2 * 4.4 / RES.h, bot = 1 - 2 * 23.6 / RES.h;
+            this.inset.scale.set(-2 * w, top - bot, 1);
+            this.inset.position.set(0, (top + bot) / 2, 0);
+            this.scene.add(this.inset);
+        }
+        if (tex) this.inset.material.map = tex;
+        this.inset.visible = !!on;
+    }
     blurPass(src, dst, dx, dy) {
+        const iv = this.inset && this.inset.visible;
+        if (this.inset) this.inset.visible = false;      // the mirror inset is not part of the glow
         this.quad.material = this.blur;
         this.blur.uniforms.tSrc.value = src.texture;
         this.blur.uniforms.uDir.value.set(dx / src.width, dy / src.height);
         this.r.setRenderTarget(dst);
         this.r.render(this.scene, this.cam);
         this.quad.material = this.mat;
+        if (this.inset) this.inset.visible = iv;
     }
     renderGlow(scene, cam) {
         const r = this.r, bg = scene.background, fog = scene.fog;
@@ -252,6 +272,8 @@ export class Post {
         if (fx.burst != null) u.uBurst.value = fx.burst;
         if (fx.time != null) u.uTime.value = fx.time;
         if (fx.rain != null) u.uRain.value = fx.rain;
+        if (fx.tint) u.uTint.value.set(...fx.tint);
+        if (fx.tintK != null) u.uTintK.value = fx.tintK;
         if (fx.slant != null) u.uRainSlant.value = fx.slant;
         if (fx.drops !== undefined) { u.tDrops.value = fx.drops; u.uDropsOn.value = fx.drops ? 1 : 0; }
         if (fx.glow != null) { this.glowOn = !!fx.glow; u.uGlow.value = fx.glow ? 1.0 : 0; }

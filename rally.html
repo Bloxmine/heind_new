@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Gravel Riot</title>
-<meta name="description" content="Gravel Riot: a dithered, low-poly rally racer by Hein Dijstelbloem, in the style of early-2000s phone 3D games.">
+<meta name="description" content="Gravel Riot: a cel-shaded, dithered rally racer with power-ups, by Hein Dijstelbloem.">
 <meta name="theme-color" content="#0b1530">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230b1530'/%3E%3Crect x='3' y='5' width='10' height='5' fill='%235b46d8'/%3E%3Crect x='5' y='3' width='6' height='3' fill='%239fd8f5'/%3E%3Crect x='3' y='10' width='3' height='3' fill='%23111'/%3E%3Crect x='10' y='10' width='3' height='3' fill='%23111'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -35,6 +35,10 @@
             <button type="button" class="mb-btn" aria-expanded="false">Race</button>
             <ul class="mb-drop">
                 <li><button type="button" data-act="drive">Test Drive</button></li>
+                <li><button type="button" data-act="garage">Garage&hellip;</button></li>
+                <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
+                <li><button type="button" data-act="view">Cockpit / Chase View <kbd>V</kbd></button></li>
+                <li><button type="button" data-act="full"><i class="chk"></i>Full Screen <kbd>F</kbd></button></li>
                 <li class="sep"></li>
                 <li><button type="button" data-opt="track:alpine"><i class="chk"></i>Alpine Pass</button></li>
                 <li><button type="button" data-opt="track:canyon"><i class="chk"></i>Red Canyon</button></li>
@@ -45,11 +49,8 @@
                 <li><button type="button" data-opt="weather:dry"><i class="chk"></i>Dry</button></li>
                 <li><button type="button" data-opt="weather:rain"><i class="chk"></i>Rain</button></li>
                 <li><button type="button" data-opt="weather:snow"><i class="chk"></i>Snow</button></li>
-                <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
-                <li><button type="button" data-act="view">Cockpit / Chase View <kbd>C</kbd></button></li>
-                <li><button type="button" data-act="full"><i class="chk"></i>Full Screen <kbd>F</kbd></button></li>
                 <li class="sep"></li>
-                <li><button type="button" data-act="quit">Quit to Title</button></li>
+                <li><button type="button" data-act="quit">Quit to Menu</button></li>
             </ul>
         </li>
         <li class="mb-item">
@@ -97,68 +98,119 @@
         <div class="win-body game-body">
             <div id="screen" class="screen crt">
                 <canvas id="game" width="320" height="180" aria-label="Game screen"></canvas>
+                <canvas id="dash2d" class="dash2d" width="320" height="180" hidden aria-hidden="true"></canvas>
                 <div class="scan" aria-hidden="true"></div>
                 <button type="button" class="fs-exit" data-act="full" aria-label="Exit full screen">&#10005; EXIT FULL SCREEN <kbd>F</kbd></button>
                 <p id="loading" class="ov loading">LOADING&hellip;</p>
 
-                <div class="ov title rtitle" id="title" hidden>
-                    <h1 class="logo" aria-label="Gravel Riot"><span class="logo-word"></span></h1>
-                    <p class="logo-sub">~ dirt roads, real cars, unreal power-ups ~</p>
-                    <div class="menu" id="title-menu">
-                        <button type="button" data-act="drive">TEST DRIVE</button>
-                        <button type="button" data-cycle="track">TRACK &#9664;<b>ALPINE PASS</b>&#9654;</button>
-                        <button type="button" data-cycle="look">LOOK &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
-                        <button type="button" data-cycle="view">CAMERA &#9664;<b>CHASE</b>&#9654;</button>
-                        <button type="button" data-cycle="weather">WEATHER &#9664;<b>TRACK</b>&#9654;</button>
-                        <button type="button" data-cycle="lines">SPEED LINES <b>ON</b></button>
-                        <button type="button" data-cycle="fps">FRAMES &#9664;<b>30 FPS</b>&#9654;</button>
-                        <button type="button" data-cycle="wobble">WOBBLE &#9664;<b>ON</b>&#9654;</button>
-                        <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
-                    </div>
-                    <p class="copy">EARLY BUILD &middot; CHECKPOINT 2 &middot; &copy; 2026 HEIN DIJSTELBLOEM</p>
+                <!-- main menu: a carousel of glowing cards -->
+                <div class="ov bmenu" id="title" hidden>
+                    <header class="btop">
+                        <span class="blogo"><span class="logo-word"></span></span>
+                        <i class="bbar"><b id="m-status"></b></i>
+                    </header>
+                    <h2 class="bsel" id="m-label">race</h2>
+                    <div class="carousel" id="carousel"></div>
+                    <p class="bdesc" id="m-desc"></p>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Open</span><span><kbd>&#8592;&#8594;</kbd>Browse</span><span id="m-back"><kbd>Esc</kbd>Back</span></footer>
                 </div>
 
-                <div class="ov rhud" id="hud" hidden>
-                    <div class="rp rp-tl">
-                        <small>TEST DRIVE</small>
-                        <b id="h-track">ALPINE PASS</b>
-                        <span>LAP <i id="h-lap">1</i></span>
-                        <span>TIME <i id="h-time">-:--.--</i></span>
-                        <span>BEST <i id="h-best">-:--.--</i></span>
-                    </div>
-                    <div class="rp rp-tr"><canvas id="minimap" width="64" height="64"></canvas></div>
-                    <div class="rp rp-br"><b id="h-speed">0</b><small>KM/H</small><span>GEAR <i id="h-gear">1</i></span></div>
-                    <p class="rmsg" id="h-msg" hidden></p>
-                    <p class="rwrong blink" id="h-wrong" hidden>WRONG WAY!</p>
+                <!-- garage: the car in 3D, its stats on the left -->
+                <div class="ov garage" id="garage" hidden>
+                    <div class="g-nav"><span class="g-arrow">&#9664;</span><b id="g-count">1/8</b><span class="g-arrow">&#9654;</span></div>
+                    <div class="g-class"><b id="g-cls">C</b></div>
+                    <h2 id="g-name">VOLTA HS</h2>
+                    <p class="g-style" id="g-style">BALANCED</p>
+                    <dl class="g-stats" id="g-stats"></dl>
+                    <p class="g-hp-l">Health</p>
+                    <div class="g-hp" id="g-hp"></div>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>&#8592;&#8594;</kbd>Cars</span><span><kbd>Esc</kbd>Back</span></footer>
                 </div>
 
-                <div class="ov panel" id="pause" hidden>
-                    <h2>PAUSED</h2>
+                <!-- options and controls -->
+                <div class="ov bpanel" id="opts" hidden>
+                    <h2>options</h2>
                     <div class="menu">
-                        <button type="button" data-act="resume">RESUME</button>
-                        <button type="button" data-act="restart">RESTART</button>
-                        <button type="button" data-cycle="look">LOOK &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
-                        <button type="button" data-cycle="view">CAMERA &#9664;<b>CHASE</b>&#9654;</button>
-                        <button type="button" data-cycle="sound">SOUND <b>ON</b></button>
-                        <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
-                        <button type="button" data-act="quit">QUIT TO TITLE</button>
+                        <button type="button" data-cycle="look">Look &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
+                        <button type="button" data-cycle="view">Camera &#9664;<b>CHASE</b>&#9654;</button>
+                        <button type="button" data-cycle="weather">Weather &#9664;<b>TRACK</b>&#9654;</button>
+                        <button type="button" data-cycle="lines">Speed lines <b>ON</b></button>
+                        <button type="button" data-cycle="fps">Frames &#9664;<b>30 FPS</b>&#9654;</button>
+                        <button type="button" data-cycle="wobble">Wobble &#9664;<b>ON</b>&#9654;</button>
+                        <button type="button" data-cycle="sound">Sound <b>ON</b></button>
+                        <button type="button" data-act="full">Full screen <b>OFF</b></button>
+                    </div>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Change</span><span><kbd>Esc</kbd>Back</span></footer>
+                </div>
+                <div class="ov bpanel" id="ctrls" hidden>
+                    <h2>controls</h2>
+                    <dl class="bctrl">
+                        <dt>&uarr; &darr;</dt><dd>gas / brake &amp; reverse</dd>
+                        <dt>&larr; &rarr;</dt><dd>steer</dd>
+                        <dt>SPACE</dt><dd>handbrake</dd>
+                        <dt>Z</dt><dd>fire power-up forward</dd>
+                        <dt>X</dt><dd>fire power-up backward</dd>
+                        <dt>C</dt><dd>switch power-up slot</dd>
+                        <dt>V</dt><dd>cockpit / chase camera</dd>
+                        <dt>R</dt><dd>back on the road</dd>
+                        <dt>P / F</dt><dd>pause / full screen</dd>
+                    </dl>
+                    <footer class="bkeys"><span><kbd>Esc</kbd>Back</span></footer>
+                </div>
+
+                <!-- the race HUD, laid out like Blur's -->
+                <div class="ov bhud" id="hud" hidden>
+                    <div class="bp b-pos"><small>Position</small><b><span id="h-pos">1</span><i>/<span id="h-of">1</span></i></b></div>
+                    <div class="bp b-time"><small>Lap <i id="h-lap">1</i></small><b id="h-time">-:--.--</b><small>Best <i id="h-best">-:--.--</i></small></div>
+                    <div class="b-mirror" aria-hidden="true"></div>
+                    <div class="b-hp" id="h-hp"></div>
+                    <div class="b-map"><canvas id="minimap" width="64" height="64"></canvas></div>
+                    <div class="bp b-speed"><small>km/h</small><b id="h-speed">0</b><small>gear <i id="h-gear">1</i></small></div>
+                    <div class="bp b-fans"><b id="h-fans">0</b><i class="heart">&#9829;</i></div>
+                    <div class="b-feed" id="h-feed"></div>
+                    <div class="b-slots" id="h-slots"></div>
+                    <p class="rmsg" id="h-msg" hidden></p>
+                    <p class="rwrong" id="h-wrong" hidden>WRONG WAY</p>
+                </div>
+
+                <div class="ov bpanel" id="pause" hidden>
+                    <h2>paused</h2>
+                    <div class="menu">
+                        <button type="button" data-act="resume">Resume</button>
+                        <button type="button" data-act="restart">Restart</button>
+                        <button type="button" data-cycle="view">Camera &#9664;<b>CHASE</b>&#9654;</button>
+                        <button type="button" data-cycle="look">Look &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
+                        <button type="button" data-cycle="sound">Sound <b>ON</b></button>
+                        <button type="button" data-act="full">Full screen <b>OFF</b></button>
+                        <button type="button" data-act="quit">Quit to menu</button>
                     </div>
                 </div>
             </div>
             <div class="touchbar rtouch" id="touchbar">
                 <button type="button" class="tbtn steer" data-touch="left" aria-label="Steer left">&#9664;</button>
                 <button type="button" class="tbtn steer" data-touch="right" aria-label="Steer right">&#9654;</button>
-                <span class="tb-hint">auto throttle</span>
-                <button type="button" class="tbtn small" data-touch="hand">HAND<br>BRAKE</button>
                 <button type="button" class="tbtn small" data-touch="brake">BRAKE</button>
+                <button type="button" class="tbtn small" data-touch="hand">HAND<br>BRAKE</button>
+                <button type="button" class="tbtn fire" data-tap="fire">FIRE</button>
+                <button type="button" class="tbtn small" data-tap="fireBack">BACK<br>FIRE</button>
                 <button type="button" class="tbtn small" data-act="view" aria-label="Camera">CAM</button>
                 <button type="button" class="tbtn small" data-act="pause" aria-label="Pause">II</button>
             </div>
         </div>
-        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE handbrake &middot; C camera &middot; R reset &middot; P pause &middot; F full screen</span><span class="grow"></span></div>
+        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE handbrake &middot; Z/X fire &middot; C slot &middot; V camera &middot; P pause &middot; F full screen</span><span class="grow"></span></div>
     </section>
 </main>
 <div id="dialogs"></div>
+<!-- pixelates the HUD and menu text: sample one pixel per block, then grow it to fill the block -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="pix" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feFlood x="1" y="1" width="1" height="1"/>
+        <feComposite id="pix-c" width="2" height="2"/>
+        <feTile result="grid"/>
+        <feComposite in="SourceGraphic" in2="grid" operator="in"/>
+        <feMorphology id="pix-m" operator="dilate" radius="1"/>
+    </filter>
+</svg>
 
 <script>window.SEA = window.SEA || {};</script>
 <script src="js/dither.js"></script>

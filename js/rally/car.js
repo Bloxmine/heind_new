@@ -5,17 +5,69 @@ import { cel, glows, GLOW } from './retro.js';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 
 // Side profiles as [z, y] (front is +z). Fictional cars, no real brands.
+// tail: height of the rear lamps; spoiler: [z, y] or null.
 const BODIES = {
     hatch: {
-        len: 4.2, width: 1.8, wheelR: 0.36, wb: [1.32, -1.3],
+        len: 4.2, width: 1.8, wheelR: 0.36, wb: [1.32, -1.3], tail: 0.82, head: 0.68, spoiler: [-1.86, 1.52],
         body: [[2.08, 0.3], [2.15, 0.55], [2.04, 0.8], [1.25, 0.98], [0.75, 1.02], [-1.85, 1.06], [-2.08, 0.98], [-2.12, 0.55], [-2.04, 0.3]],
         cabin: [[0.78, 1.0], [0.08, 1.48], [-1.32, 1.5], [-1.96, 1.04]],
         roof: [0.08, -1.32, 1.5]
+    },
+    saloon: {
+        len: 4.7, width: 1.85, wheelR: 0.36, wb: [1.45, -1.45], tail: 0.8, head: 0.66, spoiler: [-2.15, 1.12],
+        body: [[2.3, 0.3], [2.38, 0.56], [2.25, 0.8], [1.3, 0.95], [0.85, 0.98], [-1.2, 1.0], [-2.05, 0.98], [-2.35, 0.92], [-2.38, 0.55], [-2.3, 0.3]],
+        cabin: [[0.85, 0.97], [0.15, 1.42], [-0.95, 1.44], [-1.6, 1.0]],
+        roof: [0.15, -0.95, 1.44]
+    },
+    coupe: {
+        len: 4.4, width: 1.86, wheelR: 0.35, wb: [1.35, -1.35], tail: 0.72, head: 0.58, spoiler: [-2.0, 1.1],
+        body: [[2.2, 0.28], [2.26, 0.5], [2.1, 0.72], [1.0, 0.88], [0.6, 0.9], [-1.6, 0.95], [-2.15, 0.88], [-2.2, 0.5], [-2.12, 0.28]],
+        cabin: [[0.6, 0.89], [-0.15, 1.3], [-0.9, 1.32], [-1.75, 0.93]],
+        roof: [-0.15, -0.9, 1.32]
+    },
+    muscle: {
+        len: 5.0, width: 1.96, wheelR: 0.38, wb: [1.6, -1.55], tail: 0.84, head: 0.7, spoiler: [-2.35, 1.18],
+        body: [[2.5, 0.3], [2.55, 0.62], [2.45, 0.9], [1.0, 1.0], [0.55, 1.02], [-1.7, 1.02], [-2.5, 0.98], [-2.55, 0.6], [-2.48, 0.3]],
+        cabin: [[0.55, 1.0], [-0.15, 1.4], [-1.05, 1.42], [-1.75, 1.02]],
+        roof: [-0.15, -1.05, 1.42]
+    },
+    estate: {
+        len: 4.75, width: 1.85, wheelR: 0.37, wb: [1.45, -1.5], tail: 0.86, head: 0.66, spoiler: null,
+        body: [[2.32, 0.3], [2.4, 0.56], [2.26, 0.8], [1.3, 0.95], [0.85, 0.98], [-2.2, 1.02], [-2.38, 0.95], [-2.4, 0.55], [-2.32, 0.3]],
+        cabin: [[0.85, 0.97], [0.15, 1.46], [-2.1, 1.46], [-2.3, 1.0]],
+        roof: [0.15, -2.1, 1.46]
+    },
+    pickup: {
+        len: 5.1, width: 1.96, wheelR: 0.43, wb: [1.6, -1.6], tail: 0.95, head: 0.82, spoiler: null,
+        body: [[2.5, 0.45], [2.56, 0.8], [2.42, 1.12], [1.25, 1.22], [0.75, 1.24], [-2.5, 1.2], [-2.55, 0.5], [-2.45, 0.45]],
+        cabin: [[0.75, 1.22], [0.25, 1.76], [-0.65, 1.78], [-0.75, 1.22]],
+        roof: [0.25, -0.65, 1.78]
+    },
+    kei: {
+        len: 3.4, width: 1.48, wheelR: 0.3, wb: [1.1, -1.1], tail: 0.86, head: 0.7, spoiler: null,
+        body: [[1.7, 0.3], [1.74, 0.6], [1.6, 0.86], [1.1, 0.95], [0.95, 0.98], [-1.6, 1.0], [-1.72, 0.9], [-1.74, 0.5], [-1.66, 0.3]],
+        cabin: [[0.95, 0.97], [0.55, 1.55], [-1.55, 1.58], [-1.68, 1.0]],
+        roof: [0.55, -1.55, 1.58]
+    },
+    supercar: {
+        len: 4.5, width: 1.96, wheelR: 0.36, wb: [1.4, -1.4], tail: 0.66, head: 0.52, spoiler: [-2.05, 1.12],
+        body: [[2.25, 0.25], [2.3, 0.42], [2.0, 0.6], [0.7, 0.82], [0.35, 0.86], [-1.9, 0.9], [-2.25, 0.82], [-2.28, 0.45], [-2.2, 0.25]],
+        cabin: [[0.35, 0.85], [-0.4, 1.16], [-1.0, 1.16], [-1.95, 0.88]],
+        roof: [-0.4, -1.0, 1.16]
     }
 };
 
+/* Eight fictional cars. Stats are what the handling uses; the 1-5 ratings are for the garage screen.
+   hp scales how much damage the car can take. */
 export const CARS = [
-    { id: 'volta', name: 'VOLTA HS', type: 'hatch', body: '#c4c9d0', stripe: '#262c34', maxSpeed: 52, accel: 15, grip: 1.0, spoiler: true }
+    { id: 'volta', name: 'VOLTA HS', type: 'hatch', cls: 'C', style: 'BALANCED', body: '#c4c9d0', stripe: '#262c34', maxSpeed: 52, accel: 15, grip: 1.0, hp: 100, rate: { acc: 3, spd: 3, grip: 3, diff: 2 } },
+    { id: 'kestrel', name: 'KESTREL GT', type: 'coupe', cls: 'B', style: 'AGILE', body: '#e8c020', stripe: '#1a1a1a', maxSpeed: 55, accel: 15.5, grip: 1.04, hp: 90, rate: { acc: 4, spd: 4, grip: 4, diff: 3 } },
+    { id: 'brutus', name: 'BRUTUS 440', type: 'muscle', cls: 'B', style: 'POWER', body: '#7a1a1a', stripe: '#e8e8e8', maxSpeed: 58, accel: 16, grip: 0.86, hp: 115, rate: { acc: 4, spd: 5, grip: 2, diff: 4 } },
+    { id: 'senta', name: 'SENTA TOURER', type: 'estate', cls: 'D', style: 'TOUGH', body: '#3a6a4a', stripe: '#d8d8d0', maxSpeed: 48, accel: 13.5, grip: 0.98, hp: 125, rate: { acc: 2, spd: 2, grip: 3, diff: 1 } },
+    { id: 'orca', name: 'ORCA 6', type: 'saloon', cls: 'C', style: 'STEADY', body: '#1c1f24', stripe: '#c8102e', maxSpeed: 53, accel: 14.5, grip: 1.0, hp: 105, rate: { acc: 3, spd: 3, grip: 3, diff: 2 } },
+    { id: 'mule', name: 'MULE 4X4', type: 'pickup', cls: 'D', style: 'OFF-ROAD', body: '#c86a2a', stripe: '#2a2a2a', maxSpeed: 47, accel: 13, grip: 0.94, hp: 135, offroad: true, rate: { acc: 2, spd: 2, grip: 3, diff: 2 } },
+    { id: 'pixie', name: 'PIXIE K', type: 'kei', cls: 'D', style: 'GRIPPY', body: '#e8e8e0', stripe: '#3ad0ff', maxSpeed: 45, accel: 14, grip: 1.14, hp: 80, rate: { acc: 3, spd: 1, grip: 5, diff: 1 } },
+    { id: 'nova', name: 'NOVA RS', type: 'supercar', cls: 'A', style: 'FAST', body: '#2a5aa8', stripe: '#e8e8e8', maxSpeed: 62, accel: 17, grip: 1.05, hp: 85, rate: { acc: 5, spd: 5, grip: 4, diff: 5 } }
 ];
 
 const mat = (o) => cel(o);
@@ -53,19 +105,22 @@ export function makeCarMesh(spec) {
     cabin.add(roof);
     // pillars so the glass reads as windows
     for (const sx of [-1, 1]) {
-        const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.5, 0.12), paint);
-        p.position.set(sx * (B.width / 2 - 0.13), 1.25, -0.55);
+        const ph = ry - 0.98, pz = (rf + rr) / 2;
+        const p = new THREE.Mesh(new THREE.BoxGeometry(0.06, ph, 0.12), paint);
+        p.position.set(sx * (B.width / 2 - 0.13), 0.98 + ph / 2, pz);
         cabin.add(p);
     }
     const hoodStripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 1.3), stripe);
-    hoodStripe.position.set(0, 0.99, 1.4); hoodStripe.rotation.x = 0.12;
+    const hz = (B.cabin[0][0] + B.body[2][0]) / 2, hy = (B.cabin[0][1] + B.body[2][1]) / 2;
+    hoodStripe.position.set(0, hy + 0.02, hz); hoodStripe.rotation.x = Math.atan2(B.cabin[0][1] - B.body[2][1], B.body[2][0] - B.cabin[0][0]);
     body.add(hoodStripe);
     // lights, plate, bumper
     const tail = new THREE.MeshBasicMaterial({ color: '#6a0c06' });
     const head = new THREE.MeshBasicMaterial({ color: '#fff0c4' });
     for (const sx of [-1, 1]) {
-        const t = glows(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.05), tail)); t.position.set(sx * 0.6, 0.82, -2.1); body.add(t);
-        const h = glows(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.05), head)); h.position.set(sx * 0.58, 0.68, 2.12); body.add(h);
+        const zb = -B.len / 2, zf = B.len / 2, lx = B.width / 2 - 0.3;
+        const t = glows(new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.16, 0.05), tail)); t.position.set(sx * lx, B.tail, zb - 0.02); body.add(t);
+        const h = glows(new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.05), head)); h.position.set(sx * (lx - 0.02), B.head, zf + 0.02); body.add(h);
     }
     // anime star flares: a thin cross on each lamp, seen only in the glow pass
     const star = (col, size) => {
@@ -79,17 +134,18 @@ export function makeCarMesh(spec) {
     };
     const headStars = [];
     for (const sx of [-1, 1]) {
-        const ts = star('#c81c10', 1.1); ts.position.set(sx * 0.6, 0.82, -2.16); body.add(ts);
-        const hs = star('#fff0c8', 1.6); hs.position.set(sx * 0.58, 0.68, 2.18); body.add(hs);
+        const lx = B.width / 2 - 0.3;
+        const ts = star('#c81c10', 1.1); ts.position.set(sx * lx, B.tail, -B.len / 2 - 0.06); body.add(ts);
+        const hs = star('#fff0c8', 1.6); hs.position.set(sx * (lx - 0.02), B.head, B.len / 2 + 0.06); body.add(hs);
         headStars.push(hs);
     }
     const plate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.11, 0.03), cel({ color: '#9a9ea4' }));
-    plate.position.set(0, 0.55, -2.13); body.add(plate);
+    plate.position.set(0, B.tail - 0.27, -B.len / 2 - 0.03); body.add(plate);
     const bump = new THREE.Mesh(new THREE.BoxGeometry(B.width - 0.1, 0.16, 0.2), dark);
-    bump.position.set(0, 0.36, -2.06); body.add(bump);
-    if (spec.spoiler) {
-        const w = new THREE.Mesh(new THREE.BoxGeometry(B.width - 0.3, 0.05, 0.32), paint);
-        w.position.set(0, 1.52, -1.86); cabin.add(w);
+    bump.position.set(0, 0.36, -B.len / 2 + 0.04); body.add(bump);
+    if (B.spoiler) {
+        const w = new THREE.Mesh(new THREE.BoxGeometry(B.width - 0.3, 0.05, 0.32), stripe);
+        w.position.set(0, B.spoiler[1], B.spoiler[0]); cabin.add(w);
     }
     // wheels
     const wheels = [];
@@ -105,7 +161,24 @@ export function makeCarMesh(spec) {
         root.add(pivot);
         wheels.push({ pivot, spin, front: z > 0 });
     }
-    return { root, body, cabin, shell, hood, wheels, B, tail, headStars };
+    // a hex-wire shield bubble, and nitro flames out of the exhaust (both drawn in the glow pass too)
+    const bubble = glows(new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#ffe23a', wireframe: true, fog: false })));
+    bubble.scale.set(1.5, 1.2, 2.7); bubble.position.y = 0.8; bubble.visible = false;
+    body.add(bubble);
+    const flames = new THREE.Group();
+    for (const sx of [-0.45, 0.45]) {
+        const f = glows(new THREE.Mesh(new THREE.ConeGeometry(0.16, 1.3, 6), new THREE.MeshBasicMaterial({ color: '#8affd8', fog: false })));
+        f.rotation.x = -Math.PI / 2; f.position.set(sx, 0.4, -B.len / 2 - 0.65);
+        flames.add(f);
+    }
+    flames.visible = false;
+    body.add(flames);
+    // aura: only drawn in the glow pass, so it shows as a coloured halo around the car
+    const aura = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false }));
+    aura.scale.set(B.width * 0.62, 0.9, B.len * 0.55); aura.position.y = 0.75;
+    aura.layers.set(GLOW); aura.visible = false;
+    body.add(aura);
+    return { root, body, cabin, shell, hood, wheels, B, tail, headStars, bubble, flames, aura };
 }
 
 /* ---------- handling ---------- */
@@ -134,6 +207,24 @@ export class Car {
         this.steer = 0; this.slip = 0; this.speed = 0; this.vf = 0;
         this.pitch = 0; this.roll = 0; this.bounce = 0; this.wheelSpin = 0;
         this.scrape = 0; this.land = 0;
+        // combat state
+        this.health = 100; this.shield = 0; this.nitro = 0; this.wrecked = 0; this.invuln = 0;
+        this.flip = 0; this.flipRate = 0;
+        this.slots = []; this.sel = 0;
+    }
+    flashAura(col, t = 0.6) { this.auraCol = col; this.auraT = Math.max(this.auraT || 0, t); }
+    wreck() {
+        this.wrecked = 2.6;
+        this.flipRate = this.flipRate || (Math.random() < 0.5 ? -7 : 7);
+        this.vy = Math.max(this.vy, 6); this.ground = false; this.y += 0.05;
+        this.slots = []; this.shield = 0; this.nitro = 0;
+    }
+    // back on the road after a wreck: at the centre line where we were, facing the right way
+    respawn() {
+        const s = this.track.S[this.q.i];
+        this.place(s.x, s.y + 0.3, s.z, Math.atan2(s.tx, s.tz));
+        this.lastGy = this.y;
+        this.health = 100; this.wrecked = 0; this.invuln = 1.8; this.flip = 0; this.flipRate = 0;
     }
     // Headlights for dark tracks: two real spotlights that light the road ahead in hard cel bands,
     // plus a faint beam that only shows up in the glow pass, as stylised haze.
@@ -143,7 +234,7 @@ export class Car {
         this.lamps = [];
         for (const sx of [-1, 1]) {
             const L = new THREE.SpotLight('#ffe6bc', 34 * k, 75, 0.46, 0.06, 1.25);
-            L.position.set(sx * 0.58, 0.72, 2.0);
+            L.position.set(sx * 0.58, m.B.head, m.B.len / 2 - 0.1);
             L.target.position.set(sx * 1.4, -0.4, 24);
             m.body.add(L, L.target);
             this.lamps.push(L);
@@ -151,7 +242,7 @@ export class Car {
         const bm = new THREE.MeshBasicMaterial({ color: '#2a2216', transparent: true, opacity: k, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
         for (const sx of [-1, 1]) {
             const g = new THREE.BufferGeometry();
-            const x0 = sx * 0.58, z0 = 2.1;
+            const x0 = sx * 0.58, z0 = m.B.len / 2;
             g.setAttribute('position', new THREE.Float32BufferAttribute([x0, 0.7, z0, x0 + sx * 1.2 - 2.4, 0.2, 20, x0 + sx * 1.2 + 2.4, 0.2, 20], 3));
             const blade = new THREE.Mesh(g, bm);
             blade.layers.set(GLOW);
@@ -168,6 +259,10 @@ export class Car {
     }
     step(dt, inp) {
         const sp = this.spec;
+        this.invuln = Math.max(0, this.invuln - dt);
+        this.shield = Math.max(0, this.shield - dt);
+        this.nitro = Math.max(0, this.nitro - dt);
+        if (this.wrecked > 0) { this.wrecked -= dt; inp = { steer: 0, throttle: 0, brake: 0.4, handbrake: false }; }
         const fx = Math.sin(this.h), fz = Math.cos(this.h);
         const rx = -fz, rz = fx;                          // right
         let vf = this.vx * fx + this.vz * fz;
@@ -178,7 +273,9 @@ export class Car {
         // rain makes everything slippery; a puddle much more so, and it drags at the wheels
         this.inPuddle = this.track.puddleAt ? this.track.puddleAt(q) : false;
         const wet = this.track.wet ? 0.85 : 1;
-        const surf = this.inPuddle ? { grip: base.grip * 0.55 * wet, drag: base.drag + 0.25 } : wet < 1 ? { grip: base.grip * wet, drag: base.drag } : base;
+        const offroad = sp.offroad && ['verge', 'grass', 'sand', 'snow', 'gravel'].includes(q.surface) ? 0.5 : 1;
+        const surf0 = this.inPuddle ? { grip: base.grip * 0.55 * wet, drag: base.drag + 0.25 } : wet < 1 ? { grip: base.grip * wet, drag: base.drag } : base;
+        const surf = offroad < 1 ? { grip: surf0.grip, drag: surf0.drag * offroad } : surf0;
 
         // steering: smoothed input, less lock at speed
         this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
@@ -195,8 +292,9 @@ export class Car {
 
         if (g) {
             // throttle and brakes
+            if (this.nitro > 0) vf += sp.accel * 1.4 * dt * Math.max(0, 1 - vf / (sp.maxSpeed * 1.4));
             if (inp.throttle > 0) {
-                const top = sp.maxSpeed * (1 - surf.drag * 0.5);
+                const top = sp.maxSpeed * (1 - surf.drag * 0.5) * (this.nitro > 0 ? 1.35 : 1);
                 const k = vf < 0 ? 2.2 : clamp(1 - (vf / top) ** 2, 0, 1);
                 vf += sp.accel * inp.throttle * k * dt;
             }
@@ -247,9 +345,10 @@ export class Car {
             this.y = gy;
             this.vy = isFinite(climb) ? clamp(climb, -40, 40) : 0;
             this.ground = true; this.air = 0;
+            if (this.flipRate) { this.flipRate = 0; this.flip = 0; this.land = Math.max(this.land, 0.8); }
         } else {
             this.ground = this.y - gy < 0.08;
-            if (!this.ground) this.air += dt;
+            if (!this.ground) { this.air += dt; this.flip += this.flipRate * dt; }
         }
         this.lastGy = gy;
         this.speed = Math.hypot(this.vx, this.vz);
@@ -282,7 +381,20 @@ export class Car {
         }
         m.root.rotation.order = 'YXZ';
         m.root.rotation.x = this.pitch;
-        m.body.rotation.z = this.roll;
+        m.body.rotation.z = this.roll + this.flip;
+        m.bubble.visible = this.shield > 0;
+        if (this.shield > 0) { m.bubble.rotation.y += (dt || 0) * 1.5; m.bubble.visible = this.shield > 2 || Math.floor(this.shield * 8) % 2 === 0; }
+        m.flames.visible = this.nitro > 0;
+        this.auraT = Math.max(0, (this.auraT || 0) - (dt || 0));
+        const auraOn = this.auraT > 0 || this.nitro > 0;
+        m.aura.visible = auraOn;
+        if (auraOn) {
+            m.aura.material.color.set(this.nitro > 0 ? '#4aff7a' : this.auraCol);
+            const k = this.nitro > 0 ? 1 : Math.min(1, this.auraT * 2.5);
+            m.aura.material.color.multiplyScalar(0.35 + 0.65 * k * (0.75 + 0.25 * Math.sin(performance.now() / 40)));
+        }
+        if (this.nitro > 0) m.flames.scale.set(1, 1, 0.7 + Math.random() * 0.6);
+        m.root.visible = !(this.invuln > 0 && Math.floor(this.invuln * 10) % 2);
         m.body.position.y = this.bounce;
         this.wheelSpin += (this.vf / m.B.wheelR) * (dt || 0);
         m.wheels.forEach((wh) => {
