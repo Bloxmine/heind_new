@@ -363,8 +363,8 @@ export function buildTrack(def, TX) {
     // Positions on the grid, behind the start line.
     const gridSlot = (n) => {
         const row = Math.floor(n / 2), col = n % 2;
-        const i = (N - 4 - row * 4) % N, s = S[i];
-        const o = (col ? -1 : 1) * s.w * 0.22;
+        const i = (N - 5 - row * 6 - col * 3) % N, s = S[i];      // rows 12 m apart, staggered like a real grid
+        const o = (col ? -1 : 1) * s.w * 0.25;
         return { x: s.x + s.sx * o, z: s.z + s.sz * o, y: s.y, heading: Math.atan2(s.tx, s.tz), i };
     };
 

@@ -539,3 +539,17 @@ body[data-intro="1"] #hud > :not(.rmsg) { visibility: hidden; }
 
 /* lightning: the whole screen flickers white */
 .flash { position: absolute; inset: 0; z-index: 14; pointer-events: none; background: #eef4ff; opacity: 0; mix-blend-mode: screen; }
+
+/* ---------- keep the middle of the screen clear ----------
+   points and events run down the right-hand side under the fans, the drift meter sits on the left,
+   messages go under the mirror; only the countdown stays in the middle */
+.b-feed { left: auto; right: calc(var(--gp) * 5); top: calc(var(--gp) * 66); transform: none; align-items: flex-end; gap: calc(var(--gp) * 1.5); }
+.b-feed p { padding: calc(var(--gp) * 1.3) calc(var(--gp) * 4); font-size: calc(var(--gp) * 6.2); }
+body[data-kind="trial"] .b-feed { top: calc(var(--gp) * 66); }
+.b-drift { left: calc(var(--gp) * 6); top: calc(var(--gp) * 80); transform: skewX(-10deg); padding: calc(var(--gp) * 1.5) calc(var(--gp) * 4); }
+.b-drift b { font-size: calc(var(--gp) * 11); } .b-drift em { font-size: calc(var(--gp) * 10); }
+.rmsg:not(.big) { top: calc(var(--gp) * 36); font-size: calc(var(--gp) * 11); padding: calc(var(--gp) * 2) calc(var(--gp) * 7); }
+body[data-kind="trial"] .rmsg:not(.big) { top: calc(var(--gp) * 64); }
+.btoast { left: auto; right: calc(var(--gp) * 5); top: auto; bottom: calc(var(--gp) * 24); transform: none; font-size: calc(var(--gp) * 6.5); }
+@keyframes toastin { 0% { opacity: 0; transform: translateX(calc(var(--gp) * 12)); } 8%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
+body[data-view="cockpit"] .b-drift { top: calc(var(--gp) * 80); }

@@ -57,6 +57,13 @@ export class Driver {
         let vmax = 99;
         for (let k = 0; k < 14; k += 2) vmax = Math.min(vmax, P.v[(i + k + Math.floor(c.speed / 6)) % N]);
         vmax *= this.skill * this.lazy * (c.spec.maxSpeed / 52);
+        // ease off rather than run into the back of whoever is just ahead
+        const fx = Math.sin(c.h), fz = Math.cos(c.h);
+        for (const o of ctx.cars || []) {
+            if (o === c || o.out || o.wrecked > 0) continue;
+            const ox = o.x - c.x, oz = o.z - c.z, fwd = ox * fx + oz * fz, lat = Math.abs(ox * fz - oz * fx);
+            if (fwd > 0 && fwd < 7 + c.speed * 0.4 && lat < 2.4 && c.speed > o.speed) vmax = Math.min(vmax, o.speed + Math.max(0, fwd - 5.5) * 0.9);
+        }
         const over = c.speed - vmax;
         return {
             steer: clamp(-err * 2.6, -1, 1),

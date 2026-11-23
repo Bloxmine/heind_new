@@ -880,7 +880,7 @@ function startBoosts() {
     }
     for (const c of cars) if (c !== car) {
         const r = Math.random();
-        if (r < 0.2) c.nitro = 1.4; else if (r < 0.55) c.nitro = 0.6; else if (r < 0.62) { c.w = 4; c.stall = 1; }
+        if (r < 0.1) c.nitro = 0.8; else if (r < 0.4) c.nitro = 0.4; else if (r < 0.46) { c.stall = 0.6; }
     }
 }
 function resetCar(c) {
@@ -906,17 +906,19 @@ function collide(a, b) {
     b.x += nx * push * ma / (ma + mb); b.z += nz * push * ma / (ma + mb);
     const rel = (a.vx - b.vx) * nx + (a.vz - b.vz) * nz;
     if (rel <= 0) return;
-    // a proper impulse: heavier cars shove lighter ones, a little bounce
-    const j = (1 + 0.38) * rel / (1 / ma + 1 / mb);
+    // a proper impulse: heavier cars shove lighter ones, a little bounce;
+    // for the first seconds after the start, bumps are soft so the pack can sort itself out
+    const grace = race && (race.kind === 'race' || race.kind === 'battle') && raceT < 3;
+    const j = (1 + (grace ? 0.1 : 0.3)) * rel / (1 / ma + 1 / mb) * (grace ? 0.6 : 1);
     a.vx -= nx * j / ma; a.vz -= nz * j / ma; b.vx += nx * j / mb; b.vz += nz * j / mb;
     // off-centre hits turn the car: the further from the middle the contact, the more it spins
     for (const [c, sg, m] of [[a, 1, ma], [b, -1, mb]]) {
         const rx = best.cx - c.x, rz = best.cz - c.z;
         const torque = (rx * nz - rz * nx) * sg;
-        c.w += clamp(-torque * j / m * 0.06, -3, 3);
+        if (!grace) c.w += clamp(-torque * j / m * 0.035, -2, 2);
     }
     if (rel > 3) sparks(best.cx, (a.y + b.y) / 2 + 0.6, best.cz, rel);
-    if (rel > 9) for (const c of [a, b]) if (c.invuln <= 0 && c.wrecked <= 0 && c.shield <= 0) { c.health -= (rel - 9) * 1.8 * 100 / (c.spec.hp || 100); if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, c === a ? b : a, 'wreck', 'crash'); } }
+    if (rel > 12 && !grace) for (const c of [a, b]) if (c.invuln <= 0 && c.wrecked <= 0 && c.shield <= 0) { c.health -= (rel - 12) * 1.6 * 100 / (c.spec.hp || 100); if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, c === a ? b : a, 'wreck', 'crash'); } }
     if (a === car || b === car) {
         (a === car ? b : a).nmHit = T;
         if (rel > 6) endDrift(false);
