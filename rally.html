@@ -134,7 +134,20 @@
                     <dl class="g-stats" id="g-stats"></dl>
                     <p class="g-hp-l">Health</p>
                     <div class="g-hp" id="g-hp"></div>
-                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>&#8592;&#8594;</kbd>Cars</span><span><kbd>Esc</kbd>Back</span></footer>
+                    <p class="g-locked" id="g-locked" hidden>&#128274; win races to earn fans</p>
+                    <div class="g-custom" id="g-custom" hidden>
+                        <h3>paint shop</h3>
+                        <div class="menu" id="g-cmenu">
+                            <button type="button" data-cycle="c-paint">Paint <em></em></button>
+                            <button type="button" data-cycle="c-stripe">Stripe <em></em></button>
+                            <button type="button" data-cycle="c-rims">Rims <em></em></button>
+                            <button type="button" data-cycle="c-num">Number <em></em></button>
+                            <button type="button" data-cycle="c-spoiler">Spoiler <em></em></button>
+                            <button type="button" data-cycle="c-glow">Underglow <em></em></button>
+                            <button type="button" data-act="cdone">Done</button>
+                        </div>
+                    </div>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>&#8592;&#8594;</kbd>Cars</span><span><kbd>C</kbd>Paint shop</span><span><kbd>Esc</kbd>Back</span></footer>
                 </div>
 
                 <!-- options and controls -->
@@ -181,19 +194,17 @@
                     <div class="bp b-fans"><b id="h-fans">0</b><i class="heart">&#9829;</i></div>
                     <div class="b-feed" id="h-feed"></div>
                     <div class="b-slots" id="h-slots"></div>
+                    <div class="b-rev" id="h-rev" hidden><small>REV</small><i><b></b></i></div>
                     <p class="rmsg" id="h-msg" hidden></p>
                     <p class="rwrong" id="h-wrong" hidden>WRONG WAY</p>
                 </div>
 
                 <div class="ov bpanel results" id="results" hidden>
-                    <h2>results</h2>
+                    <h2 id="res-title">results</h2>
                     <ol class="res" id="res-list"></ol>
-                    <p class="res-fans">Fans <b id="res-fans">0</b> <i class="heart">&#9829;</i></p>
-                    <div class="menu row">
-                        <button type="button" data-act="restart">Race again</button>
-                        <button type="button" data-act="next">Next track</button>
-                        <button type="button" data-act="quit">Menu</button>
-                    </div>
+                    <div id="res-extra"></div>
+                    <p class="res-fans" id="res-fans"></p>
+                    <div class="menu row" id="res-menu"></div>
                 </div>
 
                 <div class="ov bpanel" id="pause" hidden>

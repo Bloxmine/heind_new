@@ -103,6 +103,31 @@
 .res-fans .heart { font-style: normal; color: #ff5ab4; }
 .bpanel .menu.row { flex-direction: row; justify-content: center; gap: calc(var(--gp) * 4); }
 
+/* career bits */
+.bbar { position: relative; overflow: hidden; }
+.bbar::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: calc(var(--fill, 0) * 100%); background: linear-gradient(90deg, rgba(255, 184, 74, 0.35), rgba(255, 184, 74, 0.6)); }
+.bbar b { position: relative; }
+.res-cup { margin: 0 0 calc(var(--gp) * 3); font: 600 calc(var(--gp) * 6.5) / 1.4 var(--f-ui2); color: #c8d4e6; text-align: center; }
+.res-cup b { font-weight: 600; margin: 0 calc(var(--gp) * 1.5); }
+.res-cup b.me { color: #fff; }
+.unlock { margin: 0 0 calc(var(--gp) * 3); text-align: center; font: 700 calc(var(--gp) * 8) / 1 var(--f-ui2); color: #ffb84a; text-shadow: 0 0 calc(var(--gp) * 4) rgba(255, 184, 74, 0.7); }
+.unlock b { color: #fff; }
+.g-locked { position: absolute; left: calc(var(--gp) * 14); top: calc(var(--gp) * 145); margin: 0; font: 600 calc(var(--gp) * 7) / 1 var(--f-ui2); color: #ffb84a; }
+.g-custom { position: absolute; left: calc(var(--gp) * 10); top: calc(var(--gp) * 70); padding: calc(var(--gp) * 4) calc(var(--gp) * 6); background: var(--glass); border: calc(var(--gp) * 0.7) solid rgba(90, 170, 255, 0.8); border-radius: calc(var(--gp) * 5); box-shadow: 0 0 calc(var(--gp) * 6) var(--glow); }
+.g-custom h3 { margin: 0 0 calc(var(--gp) * 3); font: 700 calc(var(--gp) * 9) / 1 var(--f-ui2); color: #fff8dc; }
+.g-custom .menu button { width: calc(var(--gp) * 92); display: flex; justify-content: space-between; align-items: center; font: 600 calc(var(--gp) * 7.5) / 1.2 var(--f-ui2); color: #dfe8f4; text-align: left; padding: calc(var(--gp) * 1) calc(var(--gp) * 3); border-radius: calc(var(--gp) * 2); text-shadow: none; }
+.g-custom .menu button::before { content: none; }
+.g-custom .menu button.sel { background: rgba(58, 140, 255, 0.45); color: #fff; }
+.g-custom em { font-style: normal; color: var(--cyan); }
+.g-custom .sw { display: inline-grid; place-items: center; width: calc(var(--gp) * 14); height: calc(var(--gp) * 6); border-radius: calc(var(--gp) * 1.5); box-shadow: 0 0 0 calc(var(--gp) * 0.6) #fff; font: 600 calc(var(--gp) * 5) / 1 var(--f-ui2); color: #9ca5ad; }
+.garage.custom .g-stats, .garage.custom .g-hp, .garage.custom .g-hp-l { display: none; }
+.b-rev { position: absolute; left: 50%; bottom: calc(var(--gp) * 26); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--gp) * 3); }
+.b-rev small { font: 700 calc(var(--gp) * 7) / 1 var(--f-ui2); color: var(--blue); }
+.b-rev i { display: block; width: calc(var(--gp) * 70); height: calc(var(--gp) * 6); padding: calc(var(--gp) * 0.8); background: #10151c; border-radius: calc(var(--gp) * 3); }
+.b-rev b { display: block; height: 100%; width: calc(var(--rev, 0) * 100%); border-radius: calc(var(--gp) * 2); background: linear-gradient(90deg, #4aff7a, #ffe23a 70%, #ff3a6e); }
+.b-rev.max b { animation: blink 0.12s steps(1) infinite; }
+body[data-kind="trial"] .b-pos, body[data-kind="trial"] .b-fans { display: none; }
+
 /* ---------- race HUD ---------- */
 .bhud { inset: 0; pointer-events: none; text-shadow: none; }
 .bp {
@@ -183,3 +208,5 @@ body[data-view="cockpit"] .b-speed, body[data-view="cockpit"] .b-mirror, body[da
 .rtouch .steer { min-width: 56px; font-size: 20px; }
 .rtouch .tbtn.down { background: linear-gradient(#ff9a1f, #e8562a); }
 .rtouch .fire { background: linear-gradient(#9fd8ff, #3a8cff); }
+
+.garage.custom > .bkeys { display: none; }
