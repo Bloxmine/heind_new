@@ -874,6 +874,56 @@ export function buildWorld(TX) {
         return y;
     }
 
+    /* ---------- speed traps: a camera on a pole either side of the road ---------- */
+    const traps = [];
+    {
+        const SPOTS = [['ring', 0.3, 'HIGHWAY NORTH'], ['ring', 0.8, 'HIGHWAY SOUTH'], ['radE', 0.55, 'DESERT ROAD'], ['radN', 0.5, 'FOREST ROAD'], ['coast', 0.5, 'COAST ROAD'], ['ew75', 0.5, 'DOWNTOWN']];
+        const poleM = cel({ color: '#2a3139' }), camM = cel({ color: '#d8dce0' });
+        SPOTS.forEach(([id, f, name], k) => {
+            const rd = roadById(id), s = S[rd.i0 + Math.round(f * (rd.n - 1))], hw = s.w / 2 + 1.6;
+            const flashes = [];
+            for (const sg of [-1, 1]) {
+                const x = s.x + s.rx * sg * hw, z = s.z + s.rz * sg * hw, gy = heightAt(x, z);
+                const p = new THREE.Mesh(box1(), poleM); p.scale.set(0.25, 5, 0.25); p.position.set(x, gy, z); group.add(p);
+                const cam = new THREE.Mesh(box1(), camM); cam.scale.set(0.6, 0.5, 0.9); cam.position.set(x, gy + 5, z); cam.rotation.y = Math.atan2(s.tx, s.tz); group.add(cam);
+                const fl = glows(new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.3, 0.2), new THREE.MeshBasicMaterial({ color: '#3a0a1a', fog: false })));
+                fl.position.set(x - s.tx * 0.5, gy + 5.25, z - s.tz * 0.5); group.add(fl); flashes.push(fl);
+                addOb({ x, z, r: 0.3 });
+            }
+            traps.push({ id: 'trap' + k, name, x: s.x, z: s.z, tx: s.tx, tz: s.tz, rx: s.rx, rz: s.rz, hw: s.w / 2 + 1, flashes });
+            keep.push([s.x, s.z, 8]);
+        });
+    }
+    /* ---------- smashables: cones and crates along the kerbs ---------- */
+    const smash = [];
+    {
+        const r = rng(515), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+        for (const rd of roads) {
+            if (rd.bridge || (rd.surface !== 'tarmac' && rd.id !== 'desert')) continue;
+            const city = rd.id.startsWith('ns') || rd.id.startsWith('ew');
+            for (let k = 6; k < rd.n - 3; k += 12 + ((r() * 10) | 0)) {
+                const s = S[rd.i0 + k], side = r() < 0.5 ? -1 : 1, off = (s.w / 2 + 0.9) * side;
+                const x = s.x + s.rx * off, z = s.z + s.rz * off;
+                const other = edge(x, z, 1, (o) => o.road === rd);
+                if (other && other.e < 1) continue;
+                if (railNear(x, z)?.d < 5) continue;
+                smash.push({ x, z, y: heightAt(x, z), kind: city && r() < 0.5 ? 'crate' : 'cone', alive: true, t: 0, ry: r() * 6 });
+            }
+        }
+        const kinds = {
+            cone: { geo: (() => { const g = new THREE.ConeGeometry(0.32, 0.85, 6); g.translate(0, 0.42, 0); return g; })(), mat: cel({ color: '#ff7a1a' }), col: ['#ff7a1a', '#e8e8e8'] },
+            crate: { geo: box1(), mat: cel({ map: TX.crate || null, color: '#a07a4a' }), col: ['#a07a4a', '#6a4a2a'] }
+        };
+        for (const [kind, K2] of Object.entries(kinds)) {
+            const list = smash.filter((o) => o.kind === kind);
+            list.forEach((o, i) => { o.idx = i; o.m = kind === 'crate' ? place(o.x, o.y, o.z, o.ry, 0.9, 0.9, 0.9) : place(o.x, o.y, o.z, o.ry); o.col = K2.col; });
+            const im = instanced(K2.geo, K2.mat, list.map((o) => o.m));
+            list.forEach((o) => { o.im = im; });
+            group.add(im);
+        }
+        smash.set = (o, on) => { o.alive = on; o.im.setMatrixAt(o.idx, on ? o.m : zero); o.im.instanceMatrix.needsUpdate = true; };
+    }
+
     /* ---------- golden ducks ---------- */
     const lh = group.userData.lighthouse, sm = group.userData.summit;
     const DUCK_SPOTS = [
@@ -1032,7 +1082,7 @@ export function buildWorld(TX) {
     const spawn = { x: -2.7, z: -40, y: heightAt(-2.7, -40), heading: 0, i: edge(-2.7, -40, 1).i };
 
     const world = {
-        isWorld: true, group, sky, S, N: S.length, roads, rail, trains, ducks, ramps, crossings, heightAt, query, areaAt, roadById, mapC,
+        isWorld: true, group, sky, S, N: S.length, roads, rail, trains, ducks, ramps, crossings, traps, smash, heightAt, query, areaAt, roadById, mapC,
         def: { id: 'world', name: 'FREE ROAM', headlights: 1, rain: false, surface: 'tarmac', fog: '#a8b8c8', fogNear: 100, fogFar: 800 },
         wet: false, rainK: 0, windowMats, lampHeadM, poolM, beamM, skyMat,
         gridSlot: () => spawn, spawn,
@@ -1157,6 +1207,10 @@ export class Roam {
         this.ducks = world.ducks;
         this.ducks.forEach((d) => { d.mesh.visible = !this.save.ducks.includes(d.id); });
         this.spawnTraffic();
+        if (!this.save.traps) this.save.traps = {};
+        if (!this.save.jumps) this.save.jumps = {};
+        world.smash.forEach((o) => world.smash.set(o, true));
+        this.trapSide = {};
     }
     route(c) {
         if (c.path) return c.path;
@@ -1291,9 +1345,28 @@ export class Roam {
             this.areaT += dt;
             if (this.areaT > 1.2 || !this.area) { this.area = area; api.message(area.name, 2.2); }
         } else this.areaCand = null;
-        // big air off the ramps (and anything else)
-        if (car.ground && this.prevAir > 0.9) api.reward(this.prevAir > 1.8 ? 'Huge Air' : 'Big Air', Math.round(this.prevAir * 40));
-        this.prevAir = car.ground ? 0 : car.air;
+        // speed traps: crossing the line between the poles
+        for (const tp of W.traps) {
+            const dx = car.x - tp.x, dz = car.z - tp.z, along = dx * tp.tx + dz * tp.tz, across = Math.abs(dx * tp.rx + dz * tp.rz);
+            const side = along > 0 ? 1 : -1, was = this.trapSide[tp.id];
+            this.trapSide[tp.id] = side;
+            if (was && was !== side && across < tp.hw && Math.abs(along) < 8 && car.speed > 4) {
+                const kmh = Math.round(car.speed * 3.6), best = this.save.traps[tp.id] || 0;
+                tp.flashes.forEach((f) => f.material.color.set('#ffffff')); setTimeout(() => tp.flashes.forEach((f) => f.material.color.set('#3a0a1a')), 160);
+                api.audio.beep(1760, 0.06);
+                api.message(`SPEED TRAP ${api.speedTxt(car.speed)}`, 1.8, kmh < best);
+                if (kmh > best) { this.save.traps[tp.id] = kmh; api.reward(best ? `New Record · ${tp.name.toLowerCase()}` : `Speed Trap · ${tp.name.toLowerCase()}`, Math.round(kmh / (best ? 4 : 2))); }
+            }
+        }
+        // smashables
+        for (const o of W.smash) {
+            if (!o.alive) { if ((o.t -= dt) <= 0 && Math.hypot(o.x - car.x, o.z - car.z) > 60) W.smash.set(o, true); continue; }
+            if (Math.abs(o.x - car.x) > 2.2 || Math.abs(o.z - car.z) > 2.2 || car.speed < 3) continue;
+            W.smash.set(o, false); o.t = 90;
+            for (let k = 0; k < 10; k++) api.puff(o.x, o.y + 0.5, o.z, o.col[k % 2], car.vx * 0.5 + (Math.random() - 0.5) * 6, 3 + Math.random() * 5, car.vz * 0.5 + (Math.random() - 0.5) * 6, 0.35, 0.2, 0.7);
+            api.audio.thud(0.35);
+            api.smashed();
+        }
         // into the sea
         if (car.q.water && car.y < SEA - 0.2) {
             if (this.waterT === 0) { api.audio.splash(); for (let k = 0; k < 20; k++) api.puff(car.x + (Math.random() - 0.5) * 3, SEA + 0.3, car.z + (Math.random() - 0.5) * 3, '#c8e4f4', (Math.random() - 0.5) * 8, 4 + Math.random() * 5, (Math.random() - 0.5) * 8, 0.6, 2.4, 0.9); }
@@ -1435,6 +1508,65 @@ export class Roam {
         else this.ch.gates.slice(this.ch.next, this.ch.next + 1).forEach((g) => dot(g.x, g.z, '#ffe23a', 4));
         dot(car.x, car.z, '#ffe23a', 3);
         x.fillStyle = '#ffffff'; x.fillRect(32 - Math.round(Math.sin(car.h) * 4), 32 - Math.round(Math.cos(car.h) * 4), 1, 1);
+    }
+    // a jump finished: if it left from a ramp, keep the record for that ramp
+    jumpRecord(fx, fz, dist) {
+        const k = this.w.ramps.findIndex((r) => Math.hypot(r.x - fx, r.z - fz) < 12);
+        if (k < 0) return;
+        const best = this.save.jumps[k] || 0;
+        if (dist > best) { this.save.jumps[k] = Math.round(dist); if (best) this.api.feed(`Ramp record ${Math.round(dist)} m`, 0, 'hot'); }
+    }
+    progress() {
+        const W = this.w, s = this.save, per = {};
+        W.ducks.forEach((d) => { const a = W.areaAt(d.x, d.z).name; per[a] = per[a] || [0, 0]; per[a][1]++; if (s.ducks.includes(d.id)) per[a][0]++; });
+        return {
+            ducks: [s.ducks.length, W.ducks.length], rivals: [CHALLENGES.filter((c) => s.won[c.id]).length, CHALLENGES.length],
+            traps: [Object.keys(s.traps).length, W.traps.length], jumps: [Object.keys(s.jumps).length, W.ramps.length], per
+        };
+    }
+    // the full map: the world picture with everything you can do on it
+    drawBigMap(cv) {
+        const x = cv.getContext('2d'), N = cv.width, W = this.w, s = this.save, car = this.api.car;
+        const M = (wx, wz) => [(HALF - wx) / SIZE * N, (HALF - wz) / SIZE * N];
+        x.imageSmoothingEnabled = false;
+        x.drawImage(W.mapC, 0, 0, N, N);
+        x.textAlign = 'center'; x.textBaseline = 'middle';
+        x.font = 'bold 11px "Pixelify Sans", sans-serif';
+        for (const [name, wx, wz] of [['DOWNTOWN', 0, 0], ['DUNE SEA', -610, -40], ['PINE FOREST', 0, 640], ['FROST PEAKS', 610, -60], ['LIGHTHOUSE COAST', -60, -690]]) {
+            const [px, py] = M(wx, wz);
+            x.fillStyle = 'rgba(4,7,15,0.75)'; x.fillText(name, px + 1, py + 1); x.fillStyle = '#e8eef6'; x.fillText(name, px, py);
+        }
+        const mark = (wx, wz, col, shape, label) => {
+            const [px, py] = M(wx, wz);
+            x.fillStyle = '#04070f';
+            if (shape === 'dia') { x.beginPath(); x.moveTo(px, py - 6); x.lineTo(px + 6, py); x.lineTo(px, py + 6); x.lineTo(px - 6, py); x.fill(); x.fillStyle = col; x.beginPath(); x.moveTo(px, py - 4); x.lineTo(px + 4, py); x.lineTo(px, py + 4); x.lineTo(px - 4, py); x.fill(); }
+            else if (shape === 'tri') { x.beginPath(); x.moveTo(px, py - 6); x.lineTo(px + 6, py + 4); x.lineTo(px - 6, py + 4); x.fill(); x.fillStyle = col; x.beginPath(); x.moveTo(px, py - 3); x.lineTo(px + 3.5, py + 2.5); x.lineTo(px - 3.5, py + 2.5); x.fill(); }
+            else { x.fillRect(px - 4, py - 4, 8, 8); x.fillStyle = col; x.fillRect(px - 3, py - 3, 6, 6); }
+            if (label) { x.font = '9px "Pixelify Sans", sans-serif'; x.fillStyle = '#04070f'; x.fillText(label, px + 1, py + 12); x.fillStyle = col; x.fillText(label, px, py + 11); }
+        };
+        W.ramps.forEach((r, k) => mark(r.x, r.z, s.jumps[k] ? '#ffe23a' : '#8a7a3a', 'tri', s.jumps[k] ? s.jumps[k] + 'm' : ''));
+        W.traps.forEach((t) => mark(t.x, t.z, s.traps[t.id] ? '#ff5ab4' : '#7a3a5a', 'sq', s.traps[t.id] ? this.api.speedTxt(s.traps[t.id] / 3.6) : ''));
+        this.markers.forEach((mk) => mark(mk.x, mk.z, s.won[mk.c.id] ? '#ffd27a' : '#3ad0ff', 'dia', s.won[mk.c.id] ? '' : RIVALS[mk.c.rival].name));
+        W.ducks.forEach((d) => { if (s.ducks.includes(d.id)) { const [px, py] = M(d.x, d.z); x.fillStyle = '#04070f'; x.fillRect(px - 3, py - 3, 6, 6); x.fillStyle = '#ffcc33'; x.fillRect(px - 2, py - 2, 4, 4); } });
+        for (const tr of W.trains) { const [px, py] = M(tr.head.x, tr.head.z); x.fillStyle = '#c8ccd4'; x.fillRect(px - 2, py - 2, 4, 4); }
+        // you: an arrow
+        const [px, py] = M(car.x, car.z);
+        x.save(); x.translate(px, py); x.rotate(Math.atan2(-Math.cos(car.h), -Math.sin(car.h)));
+        x.fillStyle = '#04070f'; x.beginPath(); x.moveTo(9, 0); x.lineTo(-6, 6); x.lineTo(-3, 0); x.lineTo(-6, -6); x.fill();
+        x.fillStyle = '#ffe23a'; x.beginPath(); x.moveTo(7, 0); x.lineTo(-4, 4); x.lineTo(-2, 0); x.lineTo(-4, -4); x.fill();
+        x.restore();
+        return (cx, cy) => [HALF - cx / N * SIZE, HALF - cy / N * SIZE];
+    }
+    // fast travel: drop the car on the nearest road to a point on the map
+    travel(wx, wz) {
+        if (this.ch) return false;
+        const W = this.w, S = W.S;
+        let best = -1, bd = Infinity;
+        S.forEach((s, i) => { if (s.road.bridge) return; const d = (s.x - wx) ** 2 + (s.z - wz) ** 2; if (d < bd) { bd = d; best = i; } });
+        const s = S[best], car = this.api.car;
+        car.place(s.x - s.rx * 2.6, s.y + 0.4, s.z - s.rz * 2.6, Math.atan2(s.tx, s.tz));
+        car.lastGy = car.y; this.area = null;
+        return true;
     }
     end() {
         if (this.ch) { this.ch.meshes.forEach((m) => this.group.remove(m)); this.ch = null; }

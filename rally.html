@@ -171,6 +171,7 @@
                         <button type="button" data-cycle="fps">Frames &#9664;<b>30 FPS</b>&#9654;</button>
                         <button type="button" data-cycle="wobble">Wobble &#9664;<b>ON</b>&#9654;</button>
                         <button type="button" data-cycle="diff">Rivals &#9664;<b>NORMAL</b>&#9654;</button>
+                        <button type="button" data-cycle="units">Speed in &#9664;<b>KM/H</b>&#9654;</button>
                         <button type="button" data-cycle="sound">Sound <b>ON</b></button>
                         <button type="button" data-cycle="music">Music <b>ON</b></button>
                         <button type="button" data-act="full">Full screen <b>OFF</b></button>
@@ -191,6 +192,9 @@
                         <dt>P / F</dt><dd>pause / full screen</dd>
                         <dt>ENTER</dt><dd>free roam: start a rival sprint</dd>
                         <dt>T / Y</dt><dd>free roam: fast time / next weather</dd>
+                        <dt>M</dt><dd>free roam: world map &amp; fast travel</dd>
+                        <dt>H</dt><dd>photo mode</dd>
+                        <dt>N</dt><dd>next radio station</dd>
                     </dl>
                     <footer class="bkeys"><span><kbd>Esc</kbd>Back</span></footer>
                 </div>
@@ -209,8 +213,26 @@
                     <div class="b-rev" id="h-rev" hidden><canvas id="h-revc" width="88" height="64"></canvas><small id="h-revt">LAUNCH</small></div>
                     <p class="rmsg" id="h-msg" hidden></p>
                     <p class="rwrong" id="h-wrong" hidden>WRONG WAY</p>
+                    <div class="b-drift" id="h-drift" hidden><small>DRIFT</small><b id="h-drift-n">0</b><em id="h-drift-x">×1</em><i></i></div>
                 </div>
 
+                <p class="btoast" id="toast" hidden></p>
+                <p class="photo-hint" id="photo-hint" hidden>PHOTO MODE &middot; &larr;&rarr;&uarr;&darr; orbit &middot; SHIFT + &uarr;&darr; zoom &middot; H exit</p>
+                <div class="ov bpanel trophies" id="trophies" hidden>
+                    <h2>trophies</h2>
+                    <p class="tr-sum" id="tr-sum"></p>
+                    <div class="tr-wrap"><ul class="tr-list" id="tr-list"></ul><dl class="tr-stats" id="tr-stats"></dl></div>
+                    <div class="menu"><button type="button" data-act="trback">Back</button></div>
+                </div>
+                <div class="ov bpanel wmap" id="wmap" hidden>
+                    <canvas id="wmap-c" width="384" height="384"></canvas>
+                    <div class="wm-side">
+                        <h2>map</h2>
+                        <dl class="wm-prog" id="wm-prog"></dl>
+                        <ul class="wm-key"><li><i class="k-r"></i>rival sprint</li><li><i class="k-t"></i>speed trap</li><li><i class="k-j"></i>stunt ramp</li><li><i class="k-d"></i>duck found</li><li><i class="k-y"></i>you</li></ul>
+                        <p class="wm-hint">Click the map to fast travel &middot; M to close</p>
+                    </div>
+                </div>
                 <div class="ov bpanel results" id="results" hidden>
                     <h2 id="res-title">results</h2>
                     <ol class="res" id="res-list"></ol>
@@ -223,6 +245,8 @@
                     <h2>paused</h2>
                     <div class="menu">
                         <button type="button" data-act="resume">Resume</button>
+                        <button type="button" data-act="map" id="p-map" hidden>Map</button>
+                        <button type="button" data-act="photo">Photo mode</button>
                         <button type="button" data-act="restart">Restart</button>
                         <button type="button" data-cycle="view">Camera &#9664;<b>CHASE</b>&#9654;</button>
                         <button type="button" data-cycle="look">Look &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
@@ -243,7 +267,7 @@
                 <button type="button" class="tbtn small" data-act="pause" aria-label="Pause">II</button>
             </div>
         </div>
-        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE handbrake &middot; Z/X fire &middot; C slot &middot; V camera &middot; P pause &middot; F full screen</span><span class="grow"></span></div>
+        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE handbrake &middot; Z/X fire &middot; C slot &middot; V camera &middot; M map &middot; H photo &middot; N radio &middot; P pause</span><span class="grow"></span></div>
     </section>
 </main>
 <div id="dialogs"></div>
