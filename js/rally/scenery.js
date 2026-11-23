@@ -568,9 +568,236 @@ PROPS.timbers = (ctx, o) => {
     for (let i = 0; i < S.length; i += o.every || 7) {
         const s = S[i], R = s.w / 2 + 1.5, ry = yaw(s);
         for (const sg of [-1, 1]) mats.push(place(s.x + s.sx * R * sg, s.y - 0.2, s.z + s.sz * R * sg, ry, 0.5, 4.6, 0.5));
-        mats.push(place(s.x, s.y + 4.3, s.z, ry + Math.PI / 2, s.w + 3.4, 0.5, 0.5));
+        mats.push(place(s.x, s.y + 4.3, s.z, ry, s.w + 3.4, 0.5, 0.5));
     }
     group.add(instanced(box, cel({ color: '#6a4a2a' }), mats));
+};
+
+// --- asian cities ---
+// tall vertical neon signs, lettered top to bottom
+const CJK = '"Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans CJK JP", "Noto Sans CJK SC", "Microsoft YaHei", "PingFang SC", sans-serif';
+const vsignTex = (text, a, b) => {
+    const c = document.createElement('canvas'); c.width = 24; c.height = 24 * text.length + 8;
+    const x = c.getContext('2d');
+    x.fillStyle = '#0a0c10'; x.fillRect(0, 0, c.width, c.height);
+    x.strokeStyle = a; x.lineWidth = 2; x.strokeRect(1, 1, c.width - 2, c.height - 2);
+    x.fillStyle = b; x.font = `bold 18px ${CJK}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    [...text].forEach((ch, i) => x.fillText(ch, 12, 16 + i * 24));
+    const t = new THREE.CanvasTexture(c); t.magFilter = t.minFilter = THREE.NearestFilter; t.generateMipmaps = false; t.colorSpace = THREE.SRGBColorSpace;
+    return t;
+};
+const SIGNS = ['拉麺', '酒場', '夜市', '電気', '薬局', '茶館', '旅館', '餃子', '麻雀', '劇場', '書店', '寿司'];
+const SIGNCOL = [['#ff3a6e', '#ffd23f'], ['#3ad0ff', '#ffffff'], ['#ffd23f', '#ff3a6e'], ['#4aff7a', '#ffffff'], ['#b04aff', '#3ad0ff']];
+PROPS.vneons = (ctx, o) => {
+    const { S, group } = ctx, r = rng(503);
+    for (let i = 10, k = 0; i < S.length - 5; i += o.every || 14, k++) {
+        const side = k % 2, s = S[i], text = SIGNS[k % SIGNS.length], [a, b] = SIGNCOL[k % SIGNCOL.length];
+        const bb = beside(S, i, side, s.w / 2 + (o.dist || 4) + r() * 3);
+        const h = text.length * 2.4 + 1;
+        const sign = glows(new THREE.Mesh(new THREE.PlaneGeometry(2.4, h), new THREE.MeshBasicMaterial({ map: vsignTex(text, a, b), side: THREE.DoubleSide })));
+        sign.position.set(bb.x, s.y + (o.y || 4) + h / 2 + r() * 3, bb.z);
+        sign.rotation.y = yaw(s) + Math.PI / 2;
+        group.add(sign);
+    }
+};
+// clutter on the rooftops either side of the road: water tanks, air conditioners, aerials
+PROPS.rooftop = (ctx, o) => {
+    const { S, group, def } = ctx, r = rng(509), tanks = [], acs = [], masts = [];
+    const P = def.pillar || { every: 7, len: 13, across: 20 };
+    for (let i = 0; i < S.length; i++) {
+        const k = i % P.every; if (k < 1 || k > P.every - 2) continue;
+        for (let side = 0; side < 2; side++) {
+            if (r() > 0.45) continue;
+            const s = S[i], off = s.w / 2 + 3 + r() * (P.across / 2 - 4), b = beside(S, i, side, off), y = s.y - 1.4;
+            const pick = r();
+            if (pick < 0.3) tanks.push(place(b.x, y, b.z, 0, 1.6, 3.2, 1.6));
+            else if (pick < 0.8) acs.push(place(b.x, y, b.z, yaw(s), 1.6, 1.1, 1.2));
+            else masts.push(place(b.x, y, b.z, 0, 0.12, 4 + r() * 5, 0.12));
+        }
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 8); cyl.translate(0, 0.5, 0);
+    group.add(instanced(cyl, cel({ color: '#8a7a6a' }), tanks));
+    group.add(instanced(box, cel({ color: '#c8ccd0' }), acs));
+    group.add(instanced(box, cel({ color: '#3a3e44' }), masts));
+};
+// night market stalls with striped awnings and a string of bulbs each
+PROPS.stalls = (ctx, o) => {
+    const { S, group } = ctx, r = rng(521), boxes = [], awn = [], acol = [], bulbs = [];
+    const AW = ['#e8282a', '#ffd23f', '#2a8a4a', '#2a5aa8', '#ff9a3a', '#f4f0e8'];
+    for (let i = 4; i < S.length; i += 3) for (let side = 0; side < 2; side++) {
+        if (r() > (o.density || 0.55)) continue;
+        const s = S[i], b = beside(S, i, side, s.w / 2 + 2.6);
+        if (!clear(S, b.x, b.z, s.w / 2 + 1.8)) continue;
+        boxes.push(place(b.x, s.y, b.z, yaw(s), 2.4, 1.1, 2.6));
+        const a = beside(S, i, side, s.w / 2 + 2.2);
+        awn.push(place(a.x, s.y + 2.5, a.z, yaw(s), 3.2, 0.15, 2.8)); acol.push(AW[(r() * AW.length) | 0]);
+        bulbs.push(place(a.x, s.y + 2.3, a.z, yaw(s), 0.25, 0.25, 0.25));
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#6a4a2a' }), boxes));
+    group.add(instanced(box, cel({ color: '#ffffff' }), awn, acol));
+    group.add(glows(instanced(box, new THREE.MeshBasicMaterial({ color: '#ffe0a0', fog: false }), bulbs)));
+};
+// red paper lanterns strung across the street
+PROPS.lanterns = (ctx, o) => {
+    const { S, group } = ctx, lamps = [], wires = [];
+    for (let i = 6; i < S.length; i += o.every || 6) {
+        const s = S[i], n = 5;
+        for (let k = 0; k < n; k++) {
+            const f = (k + 0.5) / n, off = (f - 0.5) * (s.w + 4), sag = Math.sin(f * Math.PI) * 0.8;
+            lamps.push(place(s.x + s.sx * off, s.y + 5.6 - sag, s.z + s.sz * off, 0, 0.9, 1.2, 0.9));
+        }
+        wires.push(place(s.x, s.y + 6.1, s.z, yaw(s), s.w + 5, 0.05, 0.05));
+    }
+    const sph = new THREE.SphereGeometry(0.5, 8, 6);
+    group.add(glows(instanced(sph, new THREE.MeshBasicMaterial({ color: o.color || '#ff4a2a', fog: false }), lamps)));
+    group.add(instanced(new THREE.BoxGeometry(1, 1, 1), cel({ color: '#1a1a1a' }), wires));
+};
+// torii gates: dense stretches make a tunnel of them, the rest stand alone
+PROPS.torii = (ctx, o) => {
+    const { S, group } = ctx, N = S.length, posts = [], beams = [], tops = [];
+    const dense = (i) => (o.ranges || []).some(([a, b]) => i / N >= a && i / N <= b);
+    for (let i = 0; i < N; i++) {
+        if (!(dense(i) ? i % (o.every || 3) === 0 : i % (o.sparse || 40) === 0)) continue;
+        const s = S[i], hw = s.w / 2 + 1.2, ry = yaw(s);
+        for (const sg of [-1, 1]) posts.push(place(s.x + s.sx * hw * sg, s.y, s.z + s.sz * hw * sg, ry, 0.7, 6.4, 0.7));
+        beams.push(place(s.x, s.y + 5.2, s.z, ry, hw * 2 + 1, 0.5, 0.5));
+        tops.push(place(s.x, s.y + 6.3, s.z, ry, hw * 2 + 3, 0.55, 0.9));
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    const cyl = new THREE.CylinderGeometry(0.5, 0.5, 1, 8); cyl.translate(0, 0.5, 0);
+    const red = cel({ color: '#e83a1a' });
+    group.add(instanced(cyl, red, posts));
+    group.add(instanced(box, red, beams));
+    group.add(instanced(box, cel({ color: '#1a1a1a' }), tops));
+};
+// pagodas: stacked storeys with flared roofs
+PROPS.pagodas = (ctx, o) => {
+    const { S, group } = ctx;
+    for (const [f, side] of o.at || [[0.45, 1]]) {
+        const i = Math.round(f * S.length) % S.length, s = S[i], b = beside(S, i, side, s.w / 2 + (o.dist || 26));
+        const g = new THREE.Group(), wall = cel({ color: '#e8dcc8' }), roofM = cel({ color: '#2a2e34' }), red = cel({ color: '#c83a1a' });
+        let y = 0;
+        for (let k = 0; k < 5; k++) {
+            const w = 9 - k * 1.3, h = 3.4;
+            const body = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), k % 2 ? wall : red); body.position.y = y + h / 2; g.add(body);
+            const roof = new THREE.Mesh(new THREE.ConeGeometry(w * 0.95, 1.6, 4), roofM); roof.rotation.y = Math.PI / 4; roof.position.y = y + h + 0.6; g.add(roof);
+            y += h + 1.1;
+        }
+        const spire = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.3, 6, 6), cel({ color: '#c8a040' })); spire.position.y = y + 3; g.add(spire);
+        g.position.set(b.x, s.y - 0.3, b.z); g.rotation.y = yaw(s);
+        group.add(g);
+    }
+};
+// stone lanterns along the shrine road, glowing softly
+PROPS.stoneLanterns = (ctx, o) => {
+    const { S, group } = ctx, bases = [], lights = [];
+    for (let i = 5, k = 0; i < S.length; i += o.every || 16, k++) {
+        const s = S[i], b = beside(S, i, k % 2, s.w / 2 + 2.4);
+        bases.push(place(b.x, s.y, b.z, yaw(s), 0.8, 1.8, 0.8));
+        lights.push(place(b.x, s.y + 1.8, b.z, yaw(s), 0.9, 0.7, 0.9));
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#8a8a82' }), bases));
+    group.add(glows(instanced(box, new THREE.MeshBasicMaterial({ color: '#ffc870', fog: false }), lights)));
+};
+// --- the sky road ---
+PROPS.blimps = (ctx, o) => {
+    const { S, group, anim } = ctx, r = rng(541), list = [];
+    for (let k = 0; k < (o.count || 3); k++) {
+        const i = (r() * S.length) | 0, s = S[i], b = beside(S, i, k % 2, 60 + r() * 80);
+        const g = new THREE.Group();
+        const hull = new THREE.Mesh(new THREE.SphereGeometry(1, 16, 10), cel({ color: '#d8dce0' })); hull.scale.set(7, 7, 22); g.add(hull);
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.4, 6, 4), cel({ color: '#e8282a' })); fin.position.set(0, 4, -18); g.add(fin);
+        const ad = glows(new THREE.Mesh(new THREE.PlaneGeometry(18, 4.4), new THREE.MeshBasicMaterial({ map: neonTex(['GRAVEL RIOT', 'SKYWAY', 'HOLD ON'][k % 3], '#3ad0ff', '#ffd23f'), side: THREE.DoubleSide })));
+        ad.position.set(7.05, 0, 0); ad.rotation.y = Math.PI / 2; g.add(ad);
+        g.position.set(b.x, s.y + 30 + r() * 30, b.z); g.rotation.y = r() * 6;
+        group.add(g); list.push(g);
+    }
+    anim.push((t) => list.forEach((g, k) => { g.rotation.y += 0.0006; g.position.y += Math.sin(t * 0.4 + k) * 0.01; }));
+};
+// --- the desert city ---
+PROPS.spire = (ctx, o) => {
+    const { S, group, anim } = ctx, i = Math.round((o.at || 0.5) * S.length) % S.length, s = S[i], b = beside(S, i, o.side || 1, s.w / 2 + (o.dist || 90));
+    const g = new THREE.Group(), glass = cel({ color: '#8ab4d0' });
+    let y = 0;
+    for (let k = 0; k < 8; k++) { const w = 26 - k * 3, h = 38 - k * 2; const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, w), glass); m.position.y = y + h / 2; m.rotation.y = k * 0.12; g.add(m); y += h; }
+    const needle = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 2, 60, 6), cel({ color: '#c8ccd0' })); needle.position.y = y + 30; g.add(needle);
+    const tip = glows(new THREE.Mesh(new THREE.BoxGeometry(1.4, 1.4, 1.4), new THREE.MeshBasicMaterial({ color: '#ff2a2a', fog: false }))); tip.position.y = y + 61; g.add(tip);
+    g.position.set(b.x, s.y - 1, b.z); group.add(g);
+    anim.push((t) => { tip.visible = Math.floor(t * 1.2) % 2 === 0; });
+};
+// --- the giant bedroom ---
+const letterTex = (ch, bg) => {
+    const c = document.createElement('canvas'); c.width = c.height = 32;
+    const x = c.getContext('2d');
+    x.fillStyle = bg; x.fillRect(0, 0, 32, 32); x.strokeStyle = 'rgba(0,0,0,0.35)'; x.lineWidth = 3; x.strokeRect(2, 2, 28, 28);
+    x.fillStyle = '#ffffff'; x.font = 'bold 22px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(ch, 16, 18);
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; return t;
+};
+PROPS.blocks = (ctx, o) => {
+    const { S, group } = ctx, r = rng(557), cols = ['#e8282a', '#2a5aa8', '#ffd23f', '#2a8a4a', '#ff7a1a', '#b04aff'];
+    for (let n = 0, tries = 0; n < (o.count || 16) && tries < 400; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i], sz = 7 + r() * 6;
+        const b = beside(S, i, side, s.w / 2 + sz + 4 + r() * 30);
+        if (!clear(S, b.x, b.z, s.w / 2 + sz * 0.8 + 2)) continue;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(sz, sz, sz), cel({ map: letterTex('ABCXYZ123'[n % 9], cols[n % cols.length]) }));
+        m.position.set(b.x, s.y - 0.3 + sz / 2 + (r() < 0.25 ? sz : 0), b.z); m.rotation.y = r() * 6;
+        group.add(m); n++;
+    }
+};
+PROPS.pencils = (ctx, o) => {
+    const { S, group } = ctx, r = rng(563), cols = ['#ffd23f', '#e8282a', '#2a5aa8', '#2a8a4a'];
+    for (let n = 0, tries = 0; n < (o.count || 6) && tries < 300; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i], b = beside(S, i, side, s.w / 2 + 14 + r() * 30);
+        if (!clear(S, b.x, b.z, s.w / 2 + 12)) continue;
+        const g = new THREE.Group(), L = 34;
+        const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, L, 6), cel({ color: cols[n % cols.length] })); shaft.rotation.z = Math.PI / 2; g.add(shaft);
+        const wood = new THREE.Mesh(new THREE.ConeGeometry(1.6, 5, 6), cel({ color: '#e8c890' })); wood.rotation.z = -Math.PI / 2; wood.position.x = L / 2 + 2.5; g.add(wood);
+        const lead = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.6, 6), cel({ color: '#2a2a2a' })); lead.rotation.z = -Math.PI / 2; lead.position.x = L / 2 + 5.2; g.add(lead);
+        const rub = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 3, 6), cel({ color: '#ff9ac8' })); rub.rotation.z = Math.PI / 2; rub.position.x = -L / 2 - 1.5; g.add(rub);
+        g.position.set(b.x, s.y + 1.3, b.z); g.rotation.y = r() * 6;
+        group.add(g); n++;
+    }
+};
+PROPS.books = (ctx, o) => {
+    const { S, group } = ctx, r = rng(569), cols = ['#7a1a1a', '#1a3a6a', '#2a5a2a', '#c8a040', '#4a2a5a'];
+    for (let n = 0, tries = 0; n < (o.count || 5) && tries < 300; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i], b = beside(S, i, side, s.w / 2 + 22 + r() * 30);
+        if (!clear(S, b.x, b.z, s.w / 2 + 18)) continue;
+        let y = s.y - 0.3;
+        for (let k = 0; k < 2 + ((r() * 3) | 0); k++) {
+            const w = 22 + r() * 6, d = 30 + r() * 6, h = 4 + r() * 2;
+            const bk = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), cel({ color: cols[(n + k) % cols.length] })); bk.position.set(b.x, y + h / 2, b.z); bk.rotation.y = r() * 0.5; group.add(bk);
+            const pages = new THREE.Mesh(new THREE.BoxGeometry(w - 1, h - 1, d + 0.2), cel({ color: '#f4eedc' })); pages.position.copy(bk.position); pages.position.x += 0.6; pages.rotation.y = bk.rotation.y; group.add(pages);
+            y += h;
+        }
+        n++;
+    }
+};
+PROPS.lamp = (ctx, o) => {
+    const { S, group } = ctx, i = Math.round((o.at || 0.3) * S.length) % S.length, s = S[i], b = beside(S, i, o.side || 1, s.w / 2 + 30);
+    const g = new THREE.Group(), m = cel({ color: '#2a5aa8' });
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(9, 10, 2.4, 14), m); base.position.y = 1.2; g.add(base);
+    const arm1 = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 34, 8), m); arm1.position.set(0, 17, 0); arm1.rotation.z = 0.35; g.add(arm1);
+    const arm2 = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, 26, 8), m); arm2.position.set(-12, 36, 0); arm2.rotation.z = -1.0; g.add(arm2);
+    const shade = new THREE.Mesh(new THREE.ConeGeometry(8, 10, 14, 1, true), cel({ color: '#2a5aa8', side: THREE.DoubleSide })); shade.position.set(-24, 40, 0); shade.rotation.z = 0.5; g.add(shade);
+    const bulb = glows(new THREE.Mesh(new THREE.SphereGeometry(3, 10, 8), new THREE.MeshBasicMaterial({ color: '#fff4c8', fog: false }))); bulb.position.set(-25, 37, 0); g.add(bulb);
+    g.position.set(b.x, s.y - 0.3, b.z); g.rotation.y = yaw(s) + (o.side ? -1 : 1) * Math.PI / 2;
+    group.add(g);
+};
+PROPS.bigDuck = (ctx, o) => {
+    const { S, group, anim } = ctx, i = Math.round((o.at || 0.7) * S.length) % S.length, s = S[i], b = beside(S, i, o.side || 0, s.w / 2 + 34);
+    const g = new THREE.Group(), y = cel({ color: '#ffd23f' });
+    const body = new THREE.Mesh(new THREE.SphereGeometry(12, 16, 12), y); body.scale.set(1, 0.8, 1.3); body.position.y = 9; g.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(7.5, 16, 12), y); head.position.set(0, 21, 8); g.add(head);
+    const beak = new THREE.Mesh(new THREE.BoxGeometry(5, 2, 6), cel({ color: '#ff7a1a' })); beak.position.set(0, 20, 15.5); g.add(beak);
+    for (const sx of [-3, 3]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(1, 8, 6), cel({ color: '#111111' })); eye.position.set(sx, 23.5, 13.6); g.add(eye); }
+    const tail = new THREE.Mesh(new THREE.ConeGeometry(4, 8, 8), y); tail.rotation.x = -1.1; tail.position.set(0, 14, -15); g.add(tail);
+    g.position.set(b.x, s.y - 0.5, b.z); g.rotation.y = yaw(s) + (o.side ? -0.6 : 0.6);
+    group.add(g);
+    anim.push((t) => { g.rotation.z = Math.sin(t * 0.8) * 0.04; });
 };
 
 export function buildProps(ctx) {

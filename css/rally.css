@@ -536,3 +536,6 @@ body[data-intro="1"] #hud > :not(.rmsg) { visibility: hidden; }
 .wipe.go { animation: wipe 0.55s steps(7) both; }
 @keyframes wipe { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 45% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; clip-path: inset(0 0 0 100%); } }
 .bmenu .bsel { top: calc(var(--gp) * 27); }
+
+/* lightning: the whole screen flickers white */
+.flash { position: absolute; inset: 0; z-index: 14; pointer-events: none; background: #eef4ff; opacity: 0; mix-blend-mode: screen; }

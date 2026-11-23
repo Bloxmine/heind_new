@@ -182,6 +182,28 @@ export function surfaceTextures() {
             speckle(x, w, h, ['#4a4644', '#544e4a', '#423e3c', '#5c5652'], 4, 97);
             dots(x, w, h, ['#2a2626', '#6e6662'], 60, 2, 6);
         }),
+        wood: make(64, 64, (x, w, h) => {
+            x.fillStyle = '#b8824a'; x.fillRect(0, 0, w, h);
+            const r = rng(41);
+            for (let y = 0; y < h; y += 16) { x.fillStyle = r() < 0.5 ? '#a87442' : '#c4905a'; x.fillRect(0, y, w, 15); x.fillStyle = '#6a4424'; x.fillRect(0, y + 15, w, 1); x.fillRect((r() * w) | 0, y, 1, 15); }
+            x.fillStyle = 'rgba(90,50,20,0.35)'; for (let i = 0; i < 40; i++) x.fillRect((r() * w) | 0, (r() * h) | 0, 6 + ((r() * 10) | 0), 1);
+        }),
+        carpet: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#3a5a8a', '#345482', '#40629a', '#2e4c7a'], 2, 43);
+            x.fillStyle = '#c84a3a'; for (let i = 0; i < 64; i += 32) { x.fillRect(i + 4, 0, 2, 64); x.fillRect(0, i + 4, 64, 2); }
+        }),
+        toytrack: make(64, 64, (x, w, h) => {
+            x.fillStyle = '#ff7a1a'; x.fillRect(0, 0, w, h);
+            x.fillStyle = '#e86a10'; for (let i = 0; i < 64; i += 4) x.fillRect(0, i, w, 1);
+            x.fillStyle = '#c85a0a'; x.fillRect(0, 62, w, 2);
+            x.fillStyle = '#ffffff'; x.fillRect(30, 8, 4, 18); x.fillRect(30, 40, 4, 18);
+        }),
+        toyrail: make(32, 32, (x) => { x.fillStyle = '#ffd23f'; x.fillRect(0, 0, 32, 32); x.fillStyle = '#ff3a3a'; for (let i = 0; i < 32; i += 16) x.fillRect(i, 0, 8, 32); }),
+        cloud: make(64, 64, (x, w, h) => {
+            x.fillStyle = '#5a6270'; x.fillRect(0, 0, w, h);
+            const r = rng(47);
+            for (let i = 0; i < 40; i++) { const cx = r() * 64, cy = r() * 64, cr = 4 + r() * 10; x.fillStyle = r() < 0.5 ? '#6a7484' : '#7a8494'; x.beginPath(); x.arc(cx, cy, cr, 0, Math.PI * 2); x.fill(); }
+        }),
         ice: make(64, 64, (x, w, h) => {
             speckle(x, w, h, ['#b8dcec', '#c8e6f4', '#a8d0e4', '#d4eef8'], 8, 101);
             x.strokeStyle = '#f4fcff'; x.lineWidth = 1;
@@ -250,6 +272,14 @@ export function treeTexture(kind = 'pine', seed = 1) {
                 const a = Math.PI + (f / 8) * Math.PI;
                 for (let k = 0; k < 13; k++) { x.fillStyle = cols[(f + k) % 3]; x.fillRect((16 + Math.cos(a) * k * 1.1) | 0, (60 + Math.sin(a) * k * 1.6 + k * k * 0.06) | 0, 2, 2); }
             }
+        } else if (kind === 'sakura') {
+            x.fillStyle = '#3a2a2a'; x.fillRect(14, 30, 4, 34); x.fillRect(8, 30, 8, 2); x.fillRect(18, 26, 6, 2);
+            const cols = ['#ffb4d4', '#ff9ac4', '#ffd0e4', '#f080b0', '#ffe4f0'];
+            for (let i = 0; i < 260; i++) {
+                const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 14;
+                x.fillStyle = cols[(r() * cols.length) | 0];
+                x.fillRect((16 + Math.cos(a) * d) | 0, (22 + Math.sin(a) * d * 1.1) | 0, 2, 2);
+            }
         } else if (kind === 'autumn' || kind === 'birch') {
             if (kind === 'birch') { x.fillStyle = '#e8e8e0'; x.fillRect(14, 30, 4, 34); x.fillStyle = '#2a2a2a'; for (let y = 34; y < 64; y += 6) x.fillRect(14 + (y % 4), y, 2, 1); }
             const cols = kind === 'birch' ? ['#e8c030', '#d8a020', '#f0d050', '#c89018'] : ['#d84a1a', '#e8782a', '#b8321a', '#f09a30', '#8a2a14'];
@@ -305,6 +335,16 @@ export function skyTexture(sky) {
                     for (let k = 0; k < n; k++) { x.beginPath(); x.arc(cx + k * 7 - n * 3.5, cy + dy - Math.sin(k / (n - 1) * Math.PI) * 6, 6 + Math.sin(k / (n - 1) * Math.PI) * 4, 0, Math.PI * 2); x.fill(); }
                 }
             }
+        }
+        if (sky.kind === 'room') {
+            // the walls of a giant bedroom: striped wallpaper, a window, a poster, the skirting board
+            for (let px = 0; px < w; px += 8) { x.fillStyle = (px / 8) % 2 ? sky.far : sky.far2; x.fillRect(px, 0, 8, h); }
+            x.fillStyle = '#ffffff'; x.fillRect(300, 14, 70, 56); x.fillStyle = '#8ac8f0'; x.fillRect(304, 18, 29, 24); x.fillRect(337, 18, 29, 24); x.fillRect(304, 44, 29, 22); x.fillRect(337, 44, 29, 22);
+            x.fillStyle = '#ffe0a0'; x.beginPath(); x.arc(350, 30, 5, 0, Math.PI * 2); x.fill();
+            x.fillStyle = '#e8282a'; x.fillRect(90, 22, 34, 46); x.fillStyle = '#ffd23f'; x.fillRect(96, 30, 22, 12); x.fillStyle = '#ffffff'; x.fillRect(100, 50, 14, 4);
+            x.fillStyle = '#3a8cff'; x.fillRect(180, 30, 26, 26); x.fillStyle = '#ffffff'; x.beginPath(); x.arc(193, 43, 8, 0, Math.PI * 2); x.fill();
+            x.fillStyle = sky.near; x.fillRect(0, 96, w, h - 96); x.fillStyle = sky.near2; x.fillRect(0, 96, w, 3);
+            return;
         }
         if (sky.kind === 'roofs') {
             // gabled rooftops, chimneys and a couple of church spires against the dusk

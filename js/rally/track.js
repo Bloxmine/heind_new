@@ -164,15 +164,21 @@ export function buildTrack(def, TX) {
             const ry = Math.atan2(n.x - s.x, n.z - s.z), len = Math.hypot(n.x - s.x, n.z - s.z, n.y - s.y);
             put(deck, (s.x + n.x) / 2, (s.y + n.y) / 2 - 1.4, (s.z + n.z) / 2, ry, s.w + 3.4, 1.38, len * 1.04);
             const h = s.y - 1.4 - def.groundY;
-            if (i % 9 === 0 && h > 2) {
-                put(pillars, s.x, def.groundY, s.z, ry, 2.4, h, 2.4);
-                put(beams, s.x, s.y - 2.4, s.z, ry, s.w + 1, 1, 2.6);
+            const P = def.pillar;
+            if (i % (P ? P.every : 9) === 0 && h > 2) {
+                if (P) put(pillars, s.x, def.groundY, s.z, ry, s.w + P.across, h, P.len);
+                else { put(pillars, s.x, def.groundY, s.z, ry, 2.4, h, 2.4); put(beams, s.x, s.y - 2.4, s.z, ry, s.w + 1, 1, 2.6); }
             }
         }
         const concrete = cel({ map: TX.concrete });
+        let pmat = concrete;
+        if (def.pillar && def.pillar.tex) {
+            const t = TX[def.pillar.tex].clone(); t.repeat.set(...(def.pillar.repeat || [3, 10])); t.needsUpdate = true;
+            pmat = cel(def.pillar.lit ? { map: t, emissive: '#ffffff', emissiveMap: t } : { map: t });
+        }
         for (const list of [deck, pillars, beams]) {
             if (!list.length) continue;
-            const im = new THREE.InstancedMesh(box, concrete, list.length);
+            const im = new THREE.InstancedMesh(box, list === pillars ? pmat : concrete, list.length);
             list.forEach((m, k) => im.setMatrixAt(k, m));
             group.add(im);
         }

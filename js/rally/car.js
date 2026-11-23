@@ -335,7 +335,10 @@ export const SURF = {
     lava: { grip: 0.5, drag: 1.0, dust: '#ff9a3a' },
     sand: { grip: 0.74, drag: 0.05, dust: '#d8945a' },
     ice: { grip: 0.36, drag: 0.02, dust: '#dff4ff' },
-    moon: { grip: 0.72, drag: 0.06, dust: '#a8a8a4' }
+    moon: { grip: 0.72, drag: 0.06, dust: '#a8a8a4' },
+    toytrack: { grip: 1.05, drag: 0, dust: null },
+    carpet: { grip: 0.7, drag: 0.4, dust: '#3a5a8a' },
+    wood: { grip: 0.85, drag: 0.1, dust: '#c8a070' }
 };
 
 export class Car {

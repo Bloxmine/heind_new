@@ -23,6 +23,7 @@ const K = {
 };
 const SC = {
     major: [0, 2, 4, 5, 7, 9, 11, 12, 14, 16], minor: [0, 2, 3, 5, 7, 8, 10, 12, 14, 15], pent: [0, 3, 5, 7, 10, 12, 15, 17, 19, 22],
+    insen: [0, 1, 5, 7, 10, 12, 13, 17, 19, 22], hijaz: [0, 1, 4, 5, 7, 8, 10, 12, 13, 16], majpent: [0, 2, 4, 7, 9, 12, 14, 16, 19, 21],
     dorian: [0, 2, 3, 5, 7, 9, 10, 12, 14, 15], mixo: [0, 2, 4, 5, 7, 9, 10, 12, 14, 16]
 };
 
@@ -187,6 +188,51 @@ export const SONGS = {
         bass: 'x.......5.......', bassType: 'pluck', filter: 1000,
         stab: '....x.x.....x.x.', stabType: 'organ',
         mel: '0.2.4.7.6.4.2.4.5.4.2.0.1...0...', melType: 'organ', scale: 'major', tonic: 72
+    },
+    // Kowloon Rooftops: future funk, chopped and bouncing
+    kowloon: {
+        bpm: 118, key: K.funk, barsPerChord: 1, kit: 'electro', swing: 0.1,
+        kick: 'x...x...x...x...', clap: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', open: '......x.......x.',
+        bass: 'x..ox..ox..ox.o.', bassType: 'slap', filter: 1600, pad: true,
+        stab: 'x..x..x...x..x..', stabType: 'epiano',
+        mel: '4...3.2.....0.2.4...5.4.2.......', melType: 'super', scale: 'dorian', tonic: 67
+    },
+    // Taipei Night Market: a lazy plucked pentatonic tune over a soft beat
+    market: {
+        bpm: 98, key: K.am, barsPerChord: 2, kit: 'soft', swing: 0.15,
+        kick: 'x......x..x.....', rim: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', shaker: '..x...x...x...x.',
+        bass: 'x.......x..o....', bassType: 'sub',
+        arp: '0.1.2...0.2.1...', arpOct: 12, arpType: 'marimba',
+        mel: '4.3...2.0...2.3.4.......6.4.3...', melType: 'twang', scale: 'majpent', tonic: 69
+    },
+    // Kyoto Shrines: taiko drums and a koto-like pluck in the in-sen scale
+    kyoto: {
+        bpm: 92, key: K.am, barsPerChord: 2, kit: 'soft',
+        kick: 'x.....x...x.....', snare: '', tom: 'l...m.l.h...m.ll', shaker: '', rim: '........x.......',
+        bass: 'x.......x.......', bassType: 'sub',
+        mel: '0.1.3...4.3.1...0...5.4.3.1.0...', melType: 'twang', scale: 'insen', tonic: 69
+    },
+    // Skyway: storm drum and bass, big and dramatic
+    skyway: {
+        bpm: 174, key: K.fmin, barsPerChord: 2, kit: 'dnb', gated: true,
+        kick: 'x.........x.....', snare: '....x.......x.x.', hat: 'xxxxxxxxxxxxxxxx', open: '......x.........',
+        bass: 'x.......x..x....', bassType: 'reese', filter: 900, pad: true,
+        arp: '0.2.1.2.0.2.1.2.', arpOct: 24, arpType: 'super'
+    },
+    // Mirage City: a hijaz melody over hand drums
+    mirage: {
+        bpm: 124, key: K.phryg, barsPerChord: 1, kit: 'soft',
+        kick: 'x.....x...x.....', rim: '..x...x...x.x.x.', tom: 'h.m.h...h.m.l.l.', shaker: 'x.x.x.x.x.x.x.x.',
+        bass: 'x..x..x.x..x..x.', bassType: 'pluck', filter: 900,
+        mel: '0.1.2.1.0...4.5.4.2.1.0.1.......', melType: 'flute', scale: 'hijaz', tonic: 64
+    },
+    // Toy Box: a bouncy toy piano and a xylophone
+    toybox: {
+        bpm: 128, key: K.cmaj, barsPerChord: 1, kit: 'soft',
+        kick: 'x.......x.......', rim: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        bass: 'x...5...x...5.o.', bassType: 'pluck', filter: 1200,
+        arp: '0120212001202120', arpOct: 24, arpType: 'marimba',
+        mel: '0.2.4.4.5.4.2...0.2.4.2.1.......', melType: 'bell', scale: 'major', tonic: 72
     },
     // Free roam: street funk, slap bass, clav and horn hits
     world: {

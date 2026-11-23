@@ -4,6 +4,17 @@ import * as THREE from 'three';
 import { MAIN_ONLY } from './retro.js';
 import { rng } from './textures.js';
 
+// what falls (or blows) for each kind of weather
+const FLAKE = {
+    rain: { col: '#c8d4e0', fall: 26, streak: 0.07, op: 0.55 },
+    storm: { col: '#d4dde8', fall: 34, wind: [7, 2], streak: 0.08, op: 0.7 },
+    snow: { col: '#f4f8ff', fall: 3.2, flake: true },
+    blizzard: { col: '#ffffff', fall: 7, wind: [12, 4], streak: 0.035, flake: true },
+    embers: { col: '#ff8a2a', fall: -1.5, flake: true },
+    leaves: { col: '#e8782a', fall: 3.2, flake: true },
+    sand: { col: '#e8b070', fall: 1.2, wind: [22, 7], streak: 0.05, flake: true },
+    petals: { col: '#ffb4d4', fall: 1.5, wind: [1.6, 0.7], flake: true }
+};
 export class Rain {
     constructor(scene, n = 480) {
         this.n = n;
@@ -11,7 +22,7 @@ export class Rain {
         this.pos = new Float32Array(n * 6);
         const g = new THREE.BufferGeometry();
         g.setAttribute('position', new THREE.BufferAttribute(this.pos, 3));
-        this.lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c8d4e0', transparent: true, opacity: 0.55, fog: false }));
+        this.lines = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ color: '#c8d4e0', transparent: true, opacity: 0.55, fog: false, depthWrite: false }));
         this.lines.frustumCulled = false;
         this.lines.layers.set(MAIN_ONLY);
         this.lines.visible = false;
@@ -21,10 +32,10 @@ export class Rain {
     setOn(on, mode = 'rain') {
         this.lines.visible = on;
         this.mode = mode;
-        const col = { snow: '#f4f8ff', embers: '#ff8a2a', leaves: '#e8782a' }[mode] || '#c8d4e0';
-        this.lines.material.color.set(col);
-        this.lines.material.opacity = mode === 'rain' ? 0.55 : 0.9;
-        this.flaky = mode !== 'rain';
+        this.M = FLAKE[mode] || FLAKE.rain;
+        this.lines.material.color.set(this.M.col);
+        this.lines.material.opacity = this.M.op || 0.9;
+        this.flaky = !!this.M.flake;
     }
     update(dt, cam, car) {
         if (!this.lines.visible) return;
@@ -34,13 +45,13 @@ export class Rain {
         for (let i = 0; i < this.n; i++) {
             if (i >= lim) { o.fill(0, i * 6, i * 6 + 6); continue; }
             let x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
-            const snow = this.flaky, fall = snow ? (this.mode === 'embers' ? -1.5 : 3.2) : 26;
-            y -= fall * dt;
+            const M = this.M || FLAKE.rain, snow = this.flaky, fall = M.fall, wx = M.wind ? M.wind[0] : 0, wz = M.wind ? M.wind[1] : 0;
+            y -= fall * dt; x += wx * dt; z += wz * dt;
             if (snow) { x += Math.sin(y * 0.9 + i) * 0.8 * dt; z += Math.cos(y * 0.7 + i * 1.3) * 0.8 * dt; }
             if (!this.init || y < c.y - 6 || y > c.y + 18 || Math.abs(x - c.x) > 22 || Math.abs(z - c.z) > 22) {
                 // respawn in a box around the camera, a little ahead of where we're going
-                x = c.x + (Math.random() - 0.5) * 40 + vx * 0.4;
-                z = c.z + (Math.random() - 0.5) * 40 + vz * 0.4;
+                x = c.x + (Math.random() - 0.5) * 40 + vx * 0.4 - wx * 0.6;
+                z = c.z + (Math.random() - 0.5) * 40 + vz * 0.4 - wz * 0.6;
                 y = c.y - 4 + Math.random() * 16;
             }
             p[i * 3] = x; p[i * 3 + 1] = y; p[i * 3 + 2] = z;
@@ -48,8 +59,8 @@ export class Rain {
             // no rain inside the car itself
             if (car && Math.abs(x - car.x) < 2.6 && Math.abs(z - car.z) < 2.6 && y < car.y + 1.8) { o.fill(0, i * 6, i * 6 + 6); continue; }
             o[i * 6] = x; o[i * 6 + 1] = y; o[i * 6 + 2] = z;
-            const k = snow ? 0.012 : 0.07;
-            o[i * 6 + 3] = x + vx * k; o[i * 6 + 4] = y + fall * k + (snow ? 0.12 : 0); o[i * 6 + 5] = z + vz * k;
+            const k = M.streak || (snow ? 0.012 : 0.07);
+            o[i * 6 + 3] = x - (wx - vx) * k; o[i * 6 + 4] = y + fall * k + (snow ? 0.12 : 0); o[i * 6 + 5] = z - (wz - vz) * k;
         }
         this.init = true;
         this.lines.geometry.attributes.position.needsUpdate = true;
@@ -210,6 +221,47 @@ export class Droplets {
 }
 
 // Rain turns any track grey and close: darker sky, low clouds, fog, lights on.
+// a track under a given weather: rain and storms darken it, fog, sandstorms and blizzards close it in
+const mixHex = (a, b, t) => { const p = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); const A = p(a), B = p(b); return '#' + A.map((v, i) => Math.round(v + (B[i] - v) * t).toString(16).padStart(2, '0')).join(''); };
+export const WX_FLAKES = { rain: 'rain', storm: 'storm', snow: 'snow', blizzard: 'blizzard', embers: 'embers', leaves: 'leaves', sandstorm: 'sand', sakura: 'petals' };
+export function weathered(base, w) {
+    const clone = () => { const c = JSON.parse(JSON.stringify(base)); c.points = base.points; c.bank = base.bank; c.trees = base.trees; return c; };
+    let d;
+    if (w === 'rain' || w === 'storm') {
+        d = rainy(base);
+        if (w === 'storm') {
+            d.storm = true; d.fog = '#262c34'; d.fogNear = 24; d.fogFar = 210;
+            Object.assign(d.sky, { top: '#0e1218', horizon: '#343c46', clouds: '#2a3038', cloudsDark: '#1a1e24' });
+            d.light = Object.assign({}, d.light, { sun: '#6a7484', amb: '#4a5262' });
+        }
+    } else if (w === 'fog') {
+        d = clone(); d.fog = mixHex(base.fog, '#a4acb4', 0.6); d.fogNear = 3; d.fogFar = 85;
+        d.headlights = Math.max(base.headlights || 0, 0.8);
+    } else if (w === 'sandstorm') {
+        d = clone(); d.fog = '#c8823e'; d.fogNear = 2; d.fogFar = 85;
+        Object.assign(d.sky, { top: '#8a5a32', horizon: '#d8a060' });
+        d.light = Object.assign({}, base.light, { sun: '#ffb070', amb: '#b08a62', disc: '#ffd0a0' });
+        d.headlights = Math.max(base.headlights || 0, 0.8);
+    } else if (w === 'blizzard') {
+        d = clone(); d.fog = '#e4ecf4'; d.fogNear = 2; d.fogFar = 72;
+        Object.assign(d.sky, { top: '#a8b4c0', horizon: '#dde6ee' });
+        d.light = Object.assign({}, base.light, { amb: '#b8c8d8' });
+        d.headlights = Math.max(base.headlights || 0, 0.8);
+    } else d = base === undefined ? base : clone();
+    d.weatherName = w;
+    d.flakes = WX_FLAKES[w] || null;
+    return d;
+}
+// what a track might get when the weather is left to chance
+export function weatherPool(base) {
+    if (base.noWeather) return [base.weather || 'dry'];
+    const cold = ['snow', 'blizzard'].includes(base.weather) || ['snow', 'ice'].includes(base.surface) || base.terrain === 'snow';
+    const dusty = ['sand'].includes(base.terrain) || ['canyon', 'mirage'].includes(base.id);
+    const pool = cold ? ['snow', 'blizzard', 'fog', 'dry'] : ['dry', 'rain', 'storm', 'fog'];
+    if (dusty) pool.push('sandstorm', 'sandstorm');
+    if (base.weather && !pool.includes(base.weather)) pool.push(base.weather, base.weather);
+    return pool;
+}
 export function rainy(def) {
     const d = JSON.parse(JSON.stringify(def));
     d.points = def.points; d.bank = def.bank; d.trees = def.trees;

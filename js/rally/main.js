@@ -7,7 +7,7 @@ import { Car, CARS, SURF, makeCarMesh } from './car.js';
 import { TRACKS } from './tracks.js';
 import { CarAudio } from './audio.js';
 import { Cockpit } from './cockpit.js';
-import { Rain, Droplets, addPuddles, rainy } from './weather.js';
+import { Rain, Droplets, addPuddles, rainy, weathered, weatherPool } from './weather.js';
 import { PU, Pickups, Weapons, iconURL } from './powerups.js';
 import { Driver, RIVALS, plan } from './ai.js';
 import { Music, SONGS } from './music.js';
@@ -73,11 +73,12 @@ const speedTxt = (ms) => CFG.units === 'mph' ? `${Math.round(ms * 2.237)} mph` :
 // the radio: track music, or any station you like
 const STATIONS = [[null, 'TRACK MUSIC'], ['world', 'STREET 104 · funk'], ['neon', 'NEON 80 · synthwave'], ['coast', 'SURF 101 · surf rock'], ['harbour', 'DOCKSIDE · drum & bass'],
     ['airfield', 'RUNWAY · trance'], ['autumn', 'LEAF FM · lo-fi'], ['volcano', 'MAGMA · industrial'], ['stadium', 'ARENA · big beat'], ['alpine', 'ALPINE FM · folk rock'],
-    ['canyon', 'DUST 88 · desert twang'], ['jungle', 'CANOPY · tribal'], ['oldtown', 'PLAZA · polka'], ['frost', 'GLACIER · ice breaks'], ['tokyo', 'EUROBEAT 99 · eurobeat'], ['park', 'CARNIVAL · fairground'], ['moon', 'ORBIT · space ambient'], ['icelake', 'PIXEL FM · chiptune'], ['cross', 'FAST 172 · punk'], ['mine', 'DEEP · dark bass'], ['race1', 'RIOT 1 · electro'], ['race2', 'RIOT 2 · electro'], ['race3', 'RIOT 3 · electro']];
+    ['canyon', 'DUST 88 · desert twang'], ['jungle', 'CANOPY · tribal'], ['oldtown', 'PLAZA · polka'], ['frost', 'GLACIER · ice breaks'], ['tokyo', 'EUROBEAT 99 · eurobeat'], ['park', 'CARNIVAL · fairground'], ['moon', 'ORBIT · space ambient'], ['icelake', 'PIXEL FM · chiptune'], ['cross', 'FAST 172 · punk'], ['mine', 'DEEP · dark bass'], ['kowloon', 'NEON FM · future funk'], ['market', 'NIGHT STALL · lo-fi'], ['kyoto', 'SHRINE · taiko'], ['skyway', 'STORMFRONT · drum & bass'], ['mirage', 'MIRAGE · desert'], ['toybox', 'TOY RADIO · toy piano'], ['race1', 'RIOT 1 · electro'], ['race2', 'RIOT 2 · electro'], ['race3', 'RIOT 3 · electro']];
 if (!(CFG.radio >= 0 && CFG.radio < STATIONS.length)) CFG.radio = 0;
 const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2', stadium: 'race2', jungle: 'race3', oldtown: 'race1', neon: 'race2', coast: 'race1', volcano: 'race3', autumn: 'race1', airfield: 'race2', world: 'race3' };
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
-const WEATHERS = ['auto', 'dry', 'rain', 'snow'];
+const WEATHERS = ['auto', 'random', 'dry', 'rain', 'storm', 'fog', 'snow', 'blizzard', 'sandstorm', 'sakura'];
+const WXN = { auto: 'TRACK', random: 'RANDOM', dry: 'DRY', rain: 'RAIN', storm: 'STORM', fog: 'FOG', snow: 'SNOW', blizzard: 'BLIZZARD', sandstorm: 'SANDSTORM', sakura: 'SAKURA' };
 if (!WEATHERS.includes(CFG.weather)) CFG.weather = 'auto';
 const trackById = (id) => TRACKS.find((t) => t.id === id) || TRACKS[0];
 const carById = (id) => CARS.find((c) => c.id === id) || CARS[0];
@@ -203,14 +204,16 @@ function reloadTrack() {
 }
 function loadTrack(base) {
     trackDef = base;
-    const w = CFG.weather === 'auto' ? base.weather || 'dry' : CFG.weather;
-    const def = w === 'rain' ? rainy(base) : base;
-    def.snowfall = w === 'snow' || w === 'embers' || w === 'leaves';
+    let w = CFG.weather === 'auto' || base.noWeather ? base.weather || 'dry' : CFG.weather;
+    if (w === 'random') { const p = weatherPool(base); w = p[(Math.random() * p.length) | 0]; }
+    const def = weathered(base, w);
+    def.snowfall = !!def.flakes && !def.rain;
     clearRace();
     if (track) scene.remove(track.group);
     track = buildTrack(def, TX);
     if (def.rain) addPuddles(track);
-    rain.setOn(!!def.rain || def.snowfall, def.rain ? 'rain' : w === 'snow' ? 'snow' : w);
+    rain.setOn(!!def.flakes, def.flakes || 'rain'); rain.k = 1;
+    hemi.intensity = 2.4; sun.intensity = 3.2; flashK = 0; stormT = 3;
     drops.clear();
     scene.add(track.group);
     scene.background = new THREE.Color(def.sky.top);
@@ -538,7 +541,9 @@ const CUPS = [
     { id: 'city', name: 'CITY CUP', tracks: ['harbour', 'oldtown', 'neon', 'stadium'] },
     { id: 'wild', name: 'WILD CUP', tracks: ['coast', 'autumn', 'airfield', 'volcano'] },
     { id: 'night', name: 'NIGHT CUP', tracks: ['tokyo', 'park', 'mine', 'neon'] },
-    { id: 'frontier', name: 'FRONTIER CUP', tracks: ['cross', 'icelake', 'moon', 'frost'] }
+    { id: 'frontier', name: 'FRONTIER CUP', tracks: ['cross', 'icelake', 'moon', 'frost'] },
+    { id: 'asia', name: 'ASIA CUP', tracks: ['kyoto', 'market', 'kowloon', 'tokyo'] },
+    { id: 'chaos', name: 'CHAOS CUP', tracks: ['toybox', 'mirage', 'skyway', 'park'] }
 ];
 const CUP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 // a car with the player's paint job and parts
@@ -1263,7 +1268,7 @@ function startIntro(kind) {
     $('#in-round').textContent = cup ? `${cup.name} · race ${cup.idx + 1}/${cup.tracks.length}` : kind === 'trial' ? 'time trial' : 'race';
     $('#in-name').textContent = t.name;
     $('#in-blurb').textContent = title(t.blurb);
-    $('#in-meta').textContent = `${kind === 'trial' ? 'beat your ghost' : `${race.laps} laps · 8 cars`} · ${title(track.def.rain ? 'rain' : track.def.snowfall ? (t.weather === 'snow' || CFG.weather === 'snow' ? 'snow' : t.weather) : 'dry')}`;
+    $('#in-meta').textContent = `${kind === 'trial' ? 'beat your ghost' : `${race.laps} laps · 8 cars`} · ${(WXN[track.def.weatherName] || 'dry').toLowerCase()}`;
     const el = $('#intro'); el.hidden = false; el.classList.remove('go'); void el.offsetWidth; el.classList.add('go');
     document.body.dataset.intro = '1';
     introCam(0);
@@ -1329,6 +1334,17 @@ function updNotes() {
     el.hidden = !ahead.length;
     const html = ahead.map(({ o, d }, n) => `<div class="pn${n ? '' : ' next'}"><img src="${noteIcon(o)}" alt=""><b>${o.text}</b><small>${o.into && n === 0 ? 'into · ' : ''}${Math.round(d / 10) * 10} m</small></div>`).join('');
     if (html !== notesHTML) { notesHTML = html; el.innerHTML = html; }
+}
+
+let flashK = 0, stormT = 3, thunderT = 0;
+function updStorm(dt) {
+    if (roam || !track || !track.def.storm) { if (flashK) { flashK = 0; $('#flash').style.opacity = 0; } return; }
+    if ((stormT -= dt) <= 0) { flashK = 1; stormT = 2.5 + Math.random() * 6; thunderT = 0.3 + Math.random() * 1.4; }
+    if (thunderT > 0 && (thunderT -= dt) <= 0) { audio.fx('boom'); if (mode === 'drive') shake = Math.max(shake, 0.15); }
+    flashK = Math.max(0, flashK - dt * 4);
+    const fl = flashK > 0.55 || (flashK > 0.18 && flashK < 0.3) ? flashK : 0;     // a double flicker
+    hemi.intensity = 2.4 + fl * 6;
+    $('#flash').style.opacity = (fl * 0.4).toFixed(3);
 }
 
 function engineSound() {
@@ -1647,7 +1663,7 @@ function syncOptions() {
     set('codriver', { voice: 'VOICE', notes: 'ARROWS', off: 'OFF' }[CFG.codriver]);
     set('radio', STATIONS[CFG.radio][1].split(' · ')[0]);
     $('.b-speed small').textContent = CFG.units === 'mph' ? 'mph' : 'km/h';
-    set('weather', CFG.weather === 'auto' ? 'TRACK' : CFG.weather.toUpperCase());
+    set('weather', WXN[CFG.weather] || CFG.weather.toUpperCase());
     set('fps', CFG.fps + ' FPS');
     set('res', RESN[RESK.indexOf(CFG.res)]);
     set('wobble', ['OFF', 'ON', 'EXTRA'][CFG.wobble]);
@@ -1851,6 +1867,7 @@ function frame(now) {
             rain.k = Math.min(1, rainK * 1.3);
         }
         rain.update(dt, cam, mode === 'drive' ? car : null);
+        updStorm(dt);
         if (track.animatePuddles) track.animatePuddles(dt);
         track.animate(T);
         const inCockpit = mode === 'drive' && CFG.view === 'cockpit';
