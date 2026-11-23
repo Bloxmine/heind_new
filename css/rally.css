@@ -1,90 +1,159 @@
-/* Gravel Riot: HUD and title on top of game.css (which supplies the Mac chrome, panels and menus). */
+/* Gravel Riot: HUD and title on top of game.css (which supplies the Mac chrome, panels and menus).
+   Style: street art. A wildstyle tag for the logo, sticker panels with rough cut edges and tape,
+   marker-pen labels, stencil numbers, spray glow and paint drips. */
 
-.rtitle .logo { top: calc(var(--px) * 14); font-size: calc(var(--px) * 30); }
-.rtitle .logo-word span {
-    background: linear-gradient(#ffffff 0 35%, #dde8ee 35% 62%, #9ca5ad 62%);
-    -webkit-background-clip: text; background-clip: text;
-    filter: drop-shadow(var(--px) 0 #07090c) drop-shadow(calc(var(--px) * -1) 0 #07090c) drop-shadow(0 var(--px) #07090c) drop-shadow(0 calc(var(--px) * -1) #07090c) drop-shadow(calc(var(--px) * 2) calc(var(--px) * 2) #4aa8ff) drop-shadow(var(--px) var(--px) #07090c);
-    font-style: italic;
+:root {
+    --f-tag: 'Sedgwick Ave Display', 'Permanent Marker', cursive;
+    --f-marker: 'Permanent Marker', 'Comic Sans MS', cursive;
+    --f-stencil: 'Black Ops One', 'Silkscreen', sans-serif;
+    --spray-a: #3ad0ff;
+    --spray-b: #ff3a6e;
+    --spray-c: #ffe23a;
 }
-.rtitle .logo-word .sp { width: calc(var(--px) * 8); }
-.rtitle .logo-sub { top: calc(var(--px) * 48); }
-.rtitle .menu { left: calc(var(--px) * 14); top: calc(var(--px) * 70); }
 
-/* HUD: inked manga panels. Slanted boxes with a thick ink border, a hard shadow, halftone dots,
-   Blur's blue for labels and italic outlined numbers. */
+/* ---------- the logo: a tag on a splat ---------- */
+.rtitle .logo { top: calc(var(--px) * 8); font: 400 calc(var(--px) * 34) / 1 var(--f-tag); letter-spacing: 0; }
+.rtitle .logo::before {
+    /* the spray-paint splat behind the tag */
+    content: '';
+    position: absolute; left: 50%; top: 50%; z-index: -1;
+    width: calc(var(--px) * 190); height: calc(var(--px) * 46);
+    transform: translate(-50%, -50%) rotate(-3deg);
+    background:
+        radial-gradient(circle at 12% 40%, rgba(255, 58, 110, 0.85) 0 18%, transparent 19%),
+        radial-gradient(circle at 88% 60%, rgba(58, 208, 255, 0.85) 0 16%, transparent 17%),
+        radial-gradient(ellipse at 50% 50%, rgba(10, 12, 16, 0.92) 0 55%, transparent 56%),
+        radial-gradient(circle at 30% 85%, rgba(255, 226, 58, 0.8) 0 6%, transparent 7%),
+        radial-gradient(circle at 70% 12%, rgba(255, 58, 110, 0.7) 0 5%, transparent 6%);
+    filter: blur(calc(var(--px) * 0.3));
+}
+.rtitle .logo-word span {
+    position: relative;
+    display: inline-block;
+    color: #ffffff;
+    background: linear-gradient(175deg, #ffffff 0 22%, var(--spray-a) 22% 55%, #1d6fff 55% 78%, #b04aff 78%);
+    -webkit-background-clip: text; background-clip: text;
+    -webkit-text-fill-color: transparent;
+    -webkit-text-stroke: calc(var(--px) * 0.8) #07090c;
+    paint-order: stroke fill;
+    filter:
+        drop-shadow(calc(var(--px) * 1.5) calc(var(--px) * 1.5) 0 #07090c)
+        drop-shadow(calc(var(--px) * 1.5) calc(var(--px) * 1.5) 0 #ff3a6e)
+        drop-shadow(0 0 calc(var(--px) * 4) rgba(58, 208, 255, 0.55));
+    transform: rotate(var(--r, 0deg)) translateY(calc(var(--y, 0) * var(--px)));
+    animation: none;
+    font-style: normal;
+}
+/* paint drips under a few letters */
+.rtitle .logo-word span:nth-child(3n + 1)::after {
+    content: '';
+    position: absolute; left: 40%; top: 82%;
+    width: calc(var(--px) * 1.6); height: calc(var(--px) * var(--dl, 6));
+    background: linear-gradient(#1d6fff, var(--spray-a));
+    border-radius: 0 0 calc(var(--px) * 1) calc(var(--px) * 1);
+    box-shadow: 0 0 0 calc(var(--px) * 0.5) #07090c;
+}
+.rtitle .logo-word .sp { width: calc(var(--px) * 6); }
+.rtitle .logo-sub { top: calc(var(--px) * 52); font: calc(var(--px) * 8) / 1 var(--f-marker); color: var(--spray-c); transform: rotate(-2deg); text-shadow: 0 0 calc(var(--px) * 3) rgba(0, 0, 0, 0.9), var(--px) var(--px) 0 #07090c; }
+.rtitle .menu { left: calc(var(--px) * 14); top: calc(var(--px) * 66); }
+.rtitle .menu button { font: calc(var(--px) * 8.5) / 1.05 var(--f-marker); letter-spacing: calc(var(--px) * 0.3); }
+.rtitle .menu button b { color: var(--spray-a); }
+.rtitle .menu button.sel { color: var(--spray-c); }
+.rtitle .copy { font: calc(var(--px) * 6.5) / 1 var(--f-marker); color: #9ca5ad; }
+
+/* ---------- HUD: stickers, tape, marker and stencil ---------- */
 .rhud {
     inset: 0; pointer-events: none;
-    --hb: #4aa8ff; --ink: #07090c; --t: max(1px, calc(var(--px) * 1.1));
+    --ink: #07090c; --t: max(1px, calc(var(--px) * 1));
     --outline: var(--t) 0 var(--ink), calc(var(--t) * -1) 0 var(--ink), 0 var(--t) var(--ink), 0 calc(var(--t) * -1) var(--ink), var(--t) var(--t) var(--ink), calc(var(--t) * -1) var(--t) var(--ink);
 }
 .rp {
     position: absolute;
-    padding: calc(var(--px) * 3) calc(var(--px) * 7) calc(var(--px) * 3) calc(var(--px) * 6);
+    padding: calc(var(--px) * 4) calc(var(--px) * 8) calc(var(--px) * 5) calc(var(--px) * 7);
     background:
-        radial-gradient(circle, rgba(74, 168, 255, 0.22) 30%, transparent 34%) 0 0 / calc(var(--px) * 3) calc(var(--px) * 3),
-        linear-gradient(#141a22, #0a0d12);
-    border: var(--t) solid var(--ink);
-    box-shadow: inset 0 0 0 var(--o) rgba(74, 168, 255, 0.6), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--ink);
-    transform: skewX(-12deg);
-    font-size: calc(var(--px) * 8);
-    line-height: 1.2;
+        radial-gradient(circle at 92% 18%, rgba(255, 58, 110, 0.35) 0 12%, transparent 13%),
+        linear-gradient(#15181d, #0b0d10);
+    /* a sticker cut out by hand: slightly wonky edges */
+    clip-path: polygon(2% 6%, 30% 0, 62% 4%, 100% 1%, 97% 48%, 100% 96%, 66% 100%, 34% 95%, 0 100%, 3% 52%);
+    filter: drop-shadow(calc(var(--px) * 2) calc(var(--px) * 2) 0 rgba(0, 0, 0, 0.6));
+    transform: rotate(-2deg);
+    font: calc(var(--px) * 8) / 1.15 var(--f-marker);
     color: #ffffff;
     text-shadow: var(--outline);
 }
-.rp > * { transform: skewX(12deg); }
-.rp small { display: block; color: var(--hb); font-size: calc(var(--px) * 7); font-style: italic; }
-.rp b { display: block; font-weight: 400; color: #ffffff; }
-.rp span { display: block; color: var(--hb); font-style: italic; }
-.rp i { font-style: normal; color: #ffffff; }
-.rp-tl { left: calc(var(--px) * 7); top: calc(var(--px) * 5); }
+/* a strip of tape across the top corner */
+.rp::before {
+    content: '';
+    position: absolute; left: calc(var(--px) * -2); top: calc(var(--px) * -1);
+    width: calc(var(--px) * 16); height: calc(var(--px) * 5);
+    background: rgba(255, 226, 58, 0.75);
+    transform: rotate(-22deg);
+}
+.rp small { display: block; color: var(--spray-a); font: calc(var(--px) * 7.5) / 1 var(--f-marker); }
+.rp b { display: block; font: calc(var(--px) * 8) / 1.2 var(--f-stencil); font-weight: 400; color: #ffffff; letter-spacing: calc(var(--px) * 0.3); }
+.rp span { display: block; color: var(--spray-b); }
+.rp i { font: normal calc(var(--px) * 7.5) / 1 var(--f-stencil); color: #ffffff; letter-spacing: calc(var(--px) * 0.3); }
+.rp-tl { left: calc(var(--px) * 6); top: calc(var(--px) * 5); }
 .rp-tr {
-    right: calc(var(--px) * 6); top: calc(var(--px) * 5);
-    padding: calc(var(--px) * 2);
-    transform: none; border-radius: 50%;
-    box-shadow: inset 0 0 0 var(--o) rgba(74, 168, 255, 0.7), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--ink);
+    right: calc(var(--px) * 6); top: calc(var(--px) * 4);
+    padding: calc(var(--px) * 3);
+    clip-path: none; border-radius: 50%;
+    background: radial-gradient(circle, #0b0d10 0 64%, transparent 65%);
+    transform: rotate(4deg);
+    outline: calc(var(--px) * 1.5) dashed var(--spray-a); outline-offset: calc(var(--px) * -2);
 }
-.rp-tr > * { transform: none; }
-.rp-tr canvas { display: block; width: calc(var(--px) * 54); height: calc(var(--px) * 54); image-rendering: pixelated; border-radius: 50%; }
-.rp-br { right: calc(var(--px) * 9); bottom: calc(var(--px) * 6); text-align: right; padding-right: calc(var(--px) * 9); }
+.rp-tr::before { left: auto; right: calc(var(--px) * -3); top: auto; bottom: calc(var(--px) * 2); transform: rotate(30deg); background: rgba(255, 58, 110, 0.75); }
+.rp-tr canvas { display: block; width: calc(var(--px) * 52); height: calc(var(--px) * 52); image-rendering: pixelated; border-radius: 50%; }
+.rp-br { right: calc(var(--px) * 8); bottom: calc(var(--px) * 5); text-align: right; transform: rotate(3deg); padding-right: calc(var(--px) * 10); }
+.rp-br::before { left: auto; right: calc(var(--px) * -3); transform: rotate(24deg); }
 .rp-br b {
-    font: italic 700 calc(var(--px) * 26) / 0.9 var(--f-logo); color: #ffffff; letter-spacing: calc(var(--px) * 0.5);
-    text-shadow: var(--outline), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--hb), calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
+    font: calc(var(--px) * 26) / 0.9 var(--f-stencil); color: var(--spray-c); letter-spacing: calc(var(--px) * 0.5);
+    text-shadow: var(--outline), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--spray-b), calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
 }
-.rp-br small { color: var(--hb); }
-.rp-br span { color: #ffffff; font-style: italic; }
-.rp-br span i { color: #ffe23a; }
-/* messages: a slanted banner with speed-line stripes, like a manga sound effect panel */
+.rp-br small { color: var(--spray-a); }
+.rp-br span { color: #ffffff; }
+.rp-br span i { color: var(--spray-c); }
+
+/* messages: a fresh tag on a splat, with drips */
 .rmsg {
-    position: absolute; left: 50%; top: calc(var(--px) * 34);
-    margin: 0; padding: calc(var(--px) * 3) calc(var(--px) * 12);
-    transform: translateX(-50%) skewX(-14deg) rotate(-2deg);
-    font: italic 700 calc(var(--px) * 13) / 1 var(--f-logo); color: #ffffff; white-space: nowrap;
+    position: absolute; left: 50%; top: calc(var(--px) * 30);
+    margin: 0; padding: calc(var(--px) * 4) calc(var(--px) * 14) calc(var(--px) * 6);
+    transform: translateX(-50%) rotate(-4deg);
+    font: calc(var(--px) * 17) / 1 var(--f-tag); color: #ffffff; white-space: nowrap;
     background:
-        repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 6), rgba(74, 168, 255, 0.25) calc(var(--px) * 6) calc(var(--px) * 7)),
-        #0d1218;
-    border: var(--t) solid var(--ink);
-    box-shadow: inset 0 0 0 var(--o) var(--hb), calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
-    text-shadow: var(--outline), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--hb);
+        radial-gradient(ellipse at 50% 55%, rgba(10, 12, 16, 0.85) 0 58%, transparent 60%),
+        radial-gradient(circle at 8% 30%, rgba(255, 58, 110, 0.8) 0 10%, transparent 11%),
+        radial-gradient(circle at 94% 70%, rgba(58, 208, 255, 0.8) 0 9%, transparent 10%);
+    -webkit-text-stroke: calc(var(--px) * 0.6) #07090c;
+    paint-order: stroke fill;
+    text-shadow: calc(var(--px) * 1.5) calc(var(--px) * 1.5) 0 var(--spray-b), 0 0 calc(var(--px) * 4) rgba(58, 208, 255, 0.7);
 }
-.rmsg.pop { animation: slam 1.6s steps(5) forwards; }
-@keyframes slam {
-    0% { transform: translateX(-50%) skewX(-14deg) rotate(-2deg) scale(1.7); }
-    12% { transform: translateX(-50%) skewX(-14deg) rotate(-2deg) scale(1); }
+.rmsg::after {
+    content: '';
+    position: absolute; left: 30%; right: 30%; bottom: calc(var(--px) * 2);
+    height: calc(var(--px) * 5);
+    background:
+        linear-gradient(var(--spray-b), var(--spray-b)) 10% 0 / calc(var(--px) * 1.5) 100% no-repeat,
+        linear-gradient(var(--spray-b), var(--spray-b)) 55% 0 / calc(var(--px) * 1.5) 60% no-repeat,
+        linear-gradient(var(--spray-b), var(--spray-b)) 85% 0 / calc(var(--px) * 1.5) 85% no-repeat;
+}
+.rmsg.pop { animation: spray 1.6s steps(5) forwards; }
+@keyframes spray {
+    0% { transform: translateX(-50%) rotate(-4deg) scale(1.6); opacity: 0; }
+    12% { transform: translateX(-50%) rotate(-4deg) scale(1); opacity: 1; }
     85% { opacity: 1; }
-    100% { opacity: 0; transform: translateX(-40%) skewX(-14deg) rotate(-2deg); }
+    100% { opacity: 0; transform: translateX(-50%) rotate(-4deg) translateY(calc(var(--px) * 4)); }
 }
 .rwrong {
     position: absolute; left: 50%; top: calc(var(--px) * 60); margin: 0;
     padding: calc(var(--px) * 2) calc(var(--px) * 10);
-    transform: translateX(-50%) skewX(-14deg);
-    font: italic 700 calc(var(--px) * 15) / 1 var(--f-logo); color: #ffffff;
-    background: #c8102e; border: var(--t) solid var(--ink);
-    box-shadow: calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
+    transform: translateX(-50%) rotate(3deg);
+    font: calc(var(--px) * 15) / 1 var(--f-stencil); color: #ffffff; letter-spacing: calc(var(--px) * 1);
+    background: #c8102e;
+    clip-path: polygon(0 8%, 100% 0, 98% 100%, 2% 92%);
     text-shadow: var(--outline);
 }
-[data-pal="dmg"] .rhud { --hb: #8bac0f; --ink: #0f380f; }
-[data-pal="dmg"] .rp, [data-pal="dmg"] .rmsg { background: #306230; }
+[data-pal="dmg"] .rhud, [data-pal="dmg"] .rtitle { --spray-a: #8bac0f; --spray-b: #306230; --spray-c: #9bbc0f; }
 
 /* touch controls */
 .touch .rtouch { gap: 8px; }

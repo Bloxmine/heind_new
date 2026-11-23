@@ -18,14 +18,21 @@ export class Rain {
         scene.add(this.lines);
         this.init = false;
     }
-    setOn(on) { this.lines.visible = on; }
+    setOn(on, mode = 'rain') {
+        this.lines.visible = on;
+        this.mode = mode;
+        this.lines.material.color.set(mode === 'snow' ? '#f4f8ff' : '#c8d4e0');
+        this.lines.material.opacity = mode === 'snow' ? 0.9 : 0.55;
+    }
     update(dt, cam, car) {
         if (!this.lines.visible) return;
         const p = this.p, o = this.pos, c = cam.position;
         const vx = car ? car.vx : 0, vz = car ? car.vz : 0;
         for (let i = 0; i < this.n; i++) {
             let x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
-            y -= 26 * dt;
+            const snow = this.mode === 'snow', fall = snow ? 3.2 : 26;
+            y -= fall * dt;
+            if (snow) { x += Math.sin(y * 0.9 + i) * 0.8 * dt; z += Math.cos(y * 0.7 + i * 1.3) * 0.8 * dt; }
             if (!this.init || y < c.y - 6 || Math.abs(x - c.x) > 22 || Math.abs(z - c.z) > 22) {
                 // respawn in a box around the camera, a little ahead of where we're going
                 x = c.x + (Math.random() - 0.5) * 40 + vx * 0.4;
@@ -37,7 +44,8 @@ export class Rain {
             // no rain inside the car itself
             if (car && Math.abs(x - car.x) < 2.6 && Math.abs(z - car.z) < 2.6 && y < car.y + 1.8) { o.fill(0, i * 6, i * 6 + 6); continue; }
             o[i * 6] = x; o[i * 6 + 1] = y; o[i * 6 + 2] = z;
-            o[i * 6 + 3] = x + vx * 0.07; o[i * 6 + 4] = y + 26 * 0.07; o[i * 6 + 5] = z + vz * 0.07;
+            const k = snow ? 0.012 : 0.07;
+            o[i * 6 + 3] = x + vx * k; o[i * 6 + 4] = y + fall * k + (snow ? 0.12 : 0); o[i * 6 + 5] = z + vz * k;
         }
         this.init = true;
         this.lines.geometry.attributes.position.needsUpdate = true;

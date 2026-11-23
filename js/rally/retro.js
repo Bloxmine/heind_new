@@ -9,7 +9,8 @@ export const glows = (obj) => { obj.layers.enable(GLOW); return obj; };
 const snap = { value: new THREE.Vector2(RES.w / 2, RES.h / 2) };
 
 // Snap every projected vertex to the low-res pixel grid, so polygons jitter like old phone 3D.
-export function retro(mat) {
+export function retro(mat, doSnap = true) {
+    if (!doSnap) return mat;
     mat.onBeforeCompile = (sh) => {
         sh.uniforms.uSnap = snap;
         sh.vertexShader = 'uniform vec2 uSnap;\n' + sh.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
@@ -32,10 +33,11 @@ const GRAD = (() => {
     t.needsUpdate = true;
     return t;
 })();
-export const cel = (opts = {}) => {
+// snap: false for big ground surfaces, whose long triangles tear when their corners are snapped
+export const cel = (opts = {}, snapIt = true) => {
     const o = Object.assign({}, opts);
     delete o.flatShading;
-    return retro(new THREE.MeshToonMaterial(Object.assign({ gradientMap: GRAD }, o)));
+    return retro(new THREE.MeshToonMaterial(Object.assign({ gradientMap: GRAD }, o)), snapIt);
 };
 
 const FRAG = `

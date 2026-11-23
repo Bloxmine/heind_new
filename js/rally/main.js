@@ -20,7 +20,10 @@ const store = {
 const fmt = (t) => (t == null || !isFinite(t) ? '-:--.--' : `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}`);
 
 /* ---------- settings ---------- */
-const CFG = Object.assign({ look: 'night', fps: 30, wobble: 1, crt: true, sound: true, lines: true, ink: true, glow: true, view: 'chase', weather: 'dry' }, store.get('heind.rally', {}));
+const CFG = Object.assign({ look: 'night', fps: 30, wobble: 1, crt: true, sound: true, lines: true, ink: true, glow: true, view: 'chase', weather: 'auto', track: 'alpine' }, store.get('heind.rally', {}));
+const WEATHERS = ['auto', 'dry', 'rain', 'snow'];
+if (!WEATHERS.includes(CFG.weather)) CFG.weather = 'auto';
+const trackById = (id) => TRACKS.find((t) => t.id === id) || TRACKS[0];
 const saveCfg = () => store.set('heind.rally', CFG);
 const SEA = window.SEA && window.SEA.SEA_PAL ? window.SEA.SEA_PAL.hexes : ['#000000', '#ffffff'];
 // Night Drive: muted greys, teals and earth tones with a few neon accents for the power-ups.
@@ -55,13 +58,20 @@ const sun = new THREE.DirectionalLight('#ffffff', 3.2);
 const hemi = new THREE.HemisphereLight('#ffffff', '#445533', 2.4);
 scene.add(sun, hemi);
 
+function reloadTrack() {
+    loadTrack(trackById(CFG.track));
+    spawnCar(CARS[0]);
+    if (mode === 'drive') startDrive();
+}
 function loadTrack(base) {
     trackDef = base;
-    const def = CFG.weather === 'rain' ? rainy(base) : base;
+    const w = CFG.weather === 'auto' ? base.weather || 'dry' : CFG.weather;
+    const def = w === 'rain' ? rainy(base) : base;
+    def.snowfall = w === 'snow';
     if (track) scene.remove(track.group);
     track = buildTrack(def, TX);
     if (def.rain) addPuddles(track);
-    rain.setOn(!!def.rain);
+    rain.setOn(!!def.rain || def.snowfall, def.rain ? 'rain' : 'snow');
     drops.clear();
     scene.add(track.group);
     scene.background = new THREE.Color(def.sky.top);
@@ -95,7 +105,7 @@ const dustGeo = new THREE.BufferGeometry();
 const dPos = new Float32Array(DUST * 3), dCol = new Float32Array(DUST * 3);
 dustGeo.setAttribute('position', new THREE.BufferAttribute(dPos, 3));
 dustGeo.setAttribute('color', new THREE.BufferAttribute(dCol, 3));
-const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 0.9, vertexColors: true, sizeAttenuation: true }));
+const dust = new THREE.Points(dustGeo, new THREE.PointsMaterial({ size: 2, vertexColors: true, sizeAttenuation: false }));
 dust.frustumCulled = false;
 dust.layers.set(MAIN_ONLY);
 const sunDisc = glows(new THREE.Mesh(new THREE.CircleGeometry(34, 20), new THREE.MeshBasicMaterial({ color: '#ffd8a0', fog: false })));
@@ -291,7 +301,7 @@ function updDrive(dt) {
     const fwd = Math.sin(car.h) * car.q.tx + Math.cos(car.h) * car.q.tz;
     wrongWay = fwd < -0.3 && car.speed > 4 ? wrongWay + dt : 0;
     stuckT = car.speed < 1 && inp.throttle ? stuckT + dt : 0;
-    if (press('reset') || stuckT > 4 || car.y < track.def.groundY + 2) { resetToRoad(); stuckT = 0; }
+    if (press('reset') || stuckT > 4 || car.y < car.q.y - 6) { resetToRoad(); stuckT = 0; }
     if (car.scrape > 0.6 && !car.scrapeSnd) { audio.thud(car.scrape); car.scrapeSnd = true; }
     if (car.scrape < 0.1) car.scrapeSnd = false;
     if (car.land > 0.5 && !car.landSnd) { audio.thud(car.land); car.landSnd = true; burst = Math.max(burst, car.land); }
@@ -301,7 +311,7 @@ function updDrive(dt) {
         if (!car.splashed) { audio.splash(); car.splashed = true; }
         for (let k = 0; k < 4; k++) emitDust(car.x + (Math.random() - 0.5) * 2, car.y + 0.2, car.z + (Math.random() - 0.5) * 2, '#c8d4e0', car.vx * 0.6 + (Math.random() - 0.5) * 8, car.vz * 0.6 + (Math.random() - 0.5) * 8);
     } else car.splashed = false;
-    if (track.wet && car.ground && car.speed > 10 && Math.random() < car.speed / 50) {
+    if (track.wet && car.ground && car.speed > 10 && Math.random() < car.speed / 160) {
         const fx = Math.sin(car.h), fz = Math.cos(car.h);
         emitDust(car.x - fx * 2, car.y, car.z - fz * 2, '#8a96a4', car.vx, car.vz);
     }
@@ -367,7 +377,8 @@ function cycle(what, dir) {
     if (what === 'ink') CFG.ink = !CFG.ink;
     if (what === 'glow') CFG.glow = !CFG.glow;
     if (what === 'view') { CFG.view = CFG.view === 'chase' ? 'cockpit' : 'chase'; if (cockpit) cockpit.setVisible(mode === 'drive' && CFG.view === 'cockpit'); }
-    if (what === 'weather') { CFG.weather = CFG.weather === 'dry' ? 'rain' : 'dry'; saveCfg(); loadTrack(trackDef); spawnCar(CARS[0]); if (mode === 'drive') startDrive(); }
+    if (what === 'weather') { CFG.weather = WEATHERS[(WEATHERS.indexOf(CFG.weather) + (dir > 0 ? 1 : WEATHERS.length - 1)) % WEATHERS.length]; saveCfg(); reloadTrack(); }
+    if (what === 'track') { const i = TRACKS.indexOf(trackById(CFG.track)); CFG.track = TRACKS[(i + (dir > 0 ? 1 : TRACKS.length - 1)) % TRACKS.length].id; saveCfg(); reloadTrack(); }
     saveCfg(); syncOptions(); audio.beep(660, 0.05);
 }
 function syncOptions() {
@@ -377,7 +388,8 @@ function syncOptions() {
     $$('[data-cycle="look"] b').forEach((b) => { b.textContent = (LOOKS[CFG.look] || LOOKS.night).name; });
     $$('[data-cycle="lines"] b').forEach((b) => { b.textContent = CFG.lines ? 'ON' : 'OFF'; });
     $$('[data-cycle="view"] b').forEach((b) => { b.textContent = CFG.view === 'chase' ? 'CHASE' : 'COCKPIT'; });
-    $$('[data-cycle="weather"] b').forEach((b) => { b.textContent = CFG.weather === 'rain' ? 'RAIN' : 'DRY'; });
+    $$('[data-cycle="weather"] b').forEach((b) => { b.textContent = CFG.weather === 'auto' ? 'TRACK' : CFG.weather.toUpperCase(); });
+    $$('[data-cycle="track"] b').forEach((b) => { b.textContent = trackById(CFG.track).name; });
     $$('[data-cycle="fps"] b').forEach((b) => { b.textContent = CFG.fps + ' FPS'; });
     $$('[data-cycle="wobble"] b').forEach((b) => { b.textContent = ['OFF', 'ON', 'EXTRA'][CFG.wobble]; });
     $$('[data-cycle="sound"] b').forEach((b) => { b.textContent = CFG.sound ? 'ON' : 'OFF'; });
@@ -407,7 +419,7 @@ const ACTS = {
     full: () => toggleFull(),
     zoom: () => toggleZoom(),
     home: () => { location.href = 'index.html'; },
-    about: () => alertBox('About Gravel Riot', '<p><b>Gravel Riot</b> &middot; checkpoint 1: test drive</p><p>A rally racer in the style of early-2000s phone 3D, run through the same dither as the rest of heind.nl. Built with Three.js; every texture and sound is generated in code.</p><p>Coming next: more tracks, rivals, and power-ups.</p>'),
+    about: () => alertBox('About Gravel Riot', '<p><b>Gravel Riot</b> &middot; checkpoint 2: four tracks</p><p>A rally racer in the style of early-2000s phone 3D, run through the same dither as the rest of heind.nl. Built with Three.js; every texture and sound is generated in code.</p><p>Coming next: more tracks, rivals, and power-ups.</p>'),
     view: () => cycle('view', 1),
     help: () => alertBox('Controls', '<p><b>Driving</b></p><p>&uarr; / W accelerate &middot; &darr; / S brake &amp; reverse<br>&larr; &rarr; / A D steer &middot; SPACE handbrake<br>C cockpit / chase camera &middot; R back on the road<br>P pause &middot; F full screen</p><p>Gamepad: stick to steer, RT gas, LT brake, X handbrake.</p>')
 };
@@ -417,7 +429,7 @@ document.addEventListener('click', (e) => {
     const opt = e.target.closest('[data-opt]');
     if (opt) {
         const [k, v] = opt.dataset.opt.split(':');
-        if (v) { CFG[k] = isNaN(+v) ? v : +v; saveCfg(); syncOptions(); } else cycle(k, 1);
+        if (v) { CFG[k] = isNaN(+v) ? v : +v; saveCfg(); syncOptions(); if (k === 'track' || k === 'weather') reloadTrack(); } else cycle(k, 1);
         closeMenus(); return;
     }
     const a = e.target.closest('[data-act]');
@@ -510,6 +522,7 @@ function frame(now) {
         }
         rain.update(dt, cam, mode === 'drive' ? car : null);
         if (track.animatePuddles) track.animatePuddles(dt);
+        track.animate(T);
         const inCockpit = mode === 'drive' && CFG.view === 'cockpit';
         if (inCockpit) {
             car.mesh.body.updateWorldMatrix(true, true);
@@ -551,7 +564,7 @@ function frame(now) {
 
 /* ---------- boot ---------- */
 fit();
-loadTrack(TRACKS[0]);
+loadTrack(trackById(CFG.track));
 toTitle();
 const ARROW = ['B', 'BB', 'BWB', 'BWWB', 'BWWWB', 'BWWWWB', 'BWWWWWB', 'BWWWWWWB', 'BWWWWWWWB', 'BWWWWWWWWB', 'BWWWWWBBBBB', 'BWWBWWB', 'BWB BWWB', 'BB  BWWB', 'B    BWWB', '     BWWB', '      BB'];
 const pix = (rows, map, sc = 1) => {
@@ -569,9 +582,11 @@ rs.setProperty('--i-anchor', pix(ANCHOR, { K: '#1f4a8f' }));
 rs.setProperty('--i-sub', pix(CARI, { K: '#000000', W: '#9fd8f5', P: '#5b46d8' }));
 rs.setProperty('--i-subbig', pix(CARI, { K: '#000000', W: '#9fd8f5', P: '#5b46d8' }, 2));
 const logo = $('.logo-word');
-if (logo) logo.innerHTML = [...'GRAVEL RIOT'].map((c, i) => c === ' ' ? '<span class="sp"> </span>' : `<span style="--i:${i}">${c}</span>`).join('');
+// each letter of the tag sits at its own angle, like it was sprayed by hand
+if (logo) logo.innerHTML = [...'GRAVEL RIOT'].map((c, i) => c === ' ' ? '<span class="sp"> </span>'
+    : `<span style="--i:${i};--r:${((i * 37) % 9 - 4) * 1.6 - 2}deg;--y:${((i * 13) % 7 - 3) * 0.7};--dl:${5 + ((i * 5) % 4) * 3}">${c}</span>`).join('');
 $('#loading')?.remove();
 requestAnimationFrame(frame);
 
 // for testing from the console
-window.RALLY = { set override(f) { override = f; }, get car() { return car; }, get track() { return track; }, get mode() { return mode; }, startDrive, keys, hits, cam, CFG, syncOptions };
+window.RALLY = { scene, set override(f) { override = f; }, get car() { return car; }, get track() { return track; }, get mode() { return mode; }, startDrive, keys, hits, cam, CFG, syncOptions };

@@ -23,7 +23,7 @@ export class Cockpit {
         const dark = cel({ color: '#1a1c20' }), mid = cel({ color: '#2c3036' }), trim = cel({ color: '#4a5058' });
 
         // dashboard and roof lining
-        const dash = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.12, 0.42), dark); dash.position.set(0, 0.95, 0.7); g.add(dash);
+        const dash = new THREE.Mesh(new THREE.BoxGeometry(1.66, 0.14, 0.44), cel({ color: '#3a3e46' })); dash.position.set(0, 0.92, 0.6); g.add(dash);
         const lining = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.04, 1.5), cel({ color: '#3a3e44', side: THREE.DoubleSide })); lining.position.set(0, 1.5, -0.62); g.add(lining);
         const header = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.05, 0.1), mid); header.position.set(0, 1.48, 0.1); g.add(header);
         for (const sx of [-1, 1]) {
@@ -121,6 +121,8 @@ export class Cockpit {
     setVisible(on) {
         this.group.visible = on;
         this.car.mesh.cabin.visible = !on;
+        this.car.mesh.shell.visible = !on;
+        this.car.mesh.hood.visible = on;
         this.car.mesh.headStars.forEach((s) => { s.visible = !on; });
         (this.car.mesh.beams || []).forEach((b) => { b.visible = !on; });
     }

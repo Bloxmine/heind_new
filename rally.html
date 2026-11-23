@@ -9,7 +9,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230b1530'/%3E%3Crect x='3' y='5' width='10' height='5' fill='%235b46d8'/%3E%3Crect x='5' y='3' width='6' height='3' fill='%239fd8f5'/%3E%3Crect x='3' y='10' width='3' height='3' fill='%23111'/%3E%3Crect x='10' y='10' width='3' height='3' fill='%23111'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Black+Ops+One&family=Permanent+Marker&family=Pixelify+Sans:wght@400;500;600;700&family=Sedgwick+Ave+Display&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="css/game.css">
 <link rel="stylesheet" href="css/rally.css">
 <script type="importmap">
@@ -35,6 +35,16 @@
             <button type="button" class="mb-btn" aria-expanded="false">Race</button>
             <ul class="mb-drop">
                 <li><button type="button" data-act="drive">Test Drive</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="track:alpine"><i class="chk"></i>Alpine Pass</button></li>
+                <li><button type="button" data-opt="track:canyon"><i class="chk"></i>Red Canyon</button></li>
+                <li><button type="button" data-opt="track:frost"><i class="chk"></i>Frostbite Ridge</button></li>
+                <li><button type="button" data-opt="track:harbour"><i class="chk"></i>Harbour Night</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="weather:auto"><i class="chk"></i>Track Weather</button></li>
+                <li><button type="button" data-opt="weather:dry"><i class="chk"></i>Dry</button></li>
+                <li><button type="button" data-opt="weather:rain"><i class="chk"></i>Rain</button></li>
+                <li><button type="button" data-opt="weather:snow"><i class="chk"></i>Snow</button></li>
                 <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
                 <li><button type="button" data-act="view">Cockpit / Chase View <kbd>C</kbd></button></li>
                 <li><button type="button" data-act="full"><i class="chk"></i>Full Screen <kbd>F</kbd></button></li>
@@ -96,15 +106,16 @@
                     <p class="logo-sub">~ dirt roads, real cars, unreal power-ups ~</p>
                     <div class="menu" id="title-menu">
                         <button type="button" data-act="drive">TEST DRIVE</button>
+                        <button type="button" data-cycle="track">TRACK &#9664;<b>ALPINE PASS</b>&#9654;</button>
                         <button type="button" data-cycle="look">LOOK &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
                         <button type="button" data-cycle="view">CAMERA &#9664;<b>CHASE</b>&#9654;</button>
-                        <button type="button" data-cycle="weather">WEATHER &#9664;<b>DRY</b>&#9654;</button>
+                        <button type="button" data-cycle="weather">WEATHER &#9664;<b>TRACK</b>&#9654;</button>
                         <button type="button" data-cycle="lines">SPEED LINES <b>ON</b></button>
                         <button type="button" data-cycle="fps">FRAMES &#9664;<b>30 FPS</b>&#9654;</button>
                         <button type="button" data-cycle="wobble">WOBBLE &#9664;<b>ON</b>&#9654;</button>
                         <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
                     </div>
-                    <p class="copy">EARLY BUILD &middot; CHECKPOINT 1 &middot; &copy; 2026 HEIN DIJSTELBLOEM</p>
+                    <p class="copy">EARLY BUILD &middot; CHECKPOINT 2 &middot; &copy; 2026 HEIN DIJSTELBLOEM</p>
                 </div>
 
                 <div class="ov rhud" id="hud" hidden>

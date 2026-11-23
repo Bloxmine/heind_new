@@ -4,6 +4,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cel } from './retro.js';
 import { rng, treeTexture, skyTexture } from './textures.js';
 import { addSigns } from './signs.js';
+import { buildProps } from './scenery.js';
 
 const SEG = 2;            // metres between samples
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -15,18 +16,19 @@ const pnoise = (s, seed) => {
 };
 
 // Cross-section beside the road for one side, relative to the road centre.
-function profile(w, H) {
+function profile(w, H, barrier) {
     const hw = w / 2, sw = clamp(Math.abs(H) * 1.1, 4, 14);
     const steep = H > 0 && H / sw > 0.55;
     const drop = H < 0;
     return {
         off: [hw, hw + 1.5, hw + 3, hw + 3 + sw, hw + 3 + sw + 12, hw + 3 + sw + 13],
-        hy: [0, 0.06, 0.3, H, H + (drop ? -1 : 1.5), null],
+        hy: [0, 0.06, 0.3, H, H + (drop ? -1 : H < 1 ? 0 : 1.5), null],
         steep, drop,
-        wall: drop ? hw + 1.3 : steep ? hw + 3 : hw + 3 + sw * 0.55
+        wall: barrier ? hw + 1.55 : drop ? hw + 1.3 : steep ? hw + 3 : hw + 3 + sw * 0.55
     };
 }
 const heightAt = (p, ad) => {
+    if (ad <= p.off[0]) return p.hy[0];
     for (let k = 0; k < 4; k++) if (ad <= p.off[k + 1]) return lerp(p.hy[k], p.hy[k + 1], (ad - p.off[k]) / (p.off[k + 1] - p.off[k]));
     return p.hy[4];
 };
@@ -38,6 +40,15 @@ export function buildTrack(def, TX) {
     const N = Math.max(120, Math.round(L / SEG));
     const sp = curve.getSpacedPoints(N);
     const seg = L / N;
+    for (const j of def.jumps || []) {
+        const c = Math.round(j.at * N), up = Math.round(j.len / seg), down = Math.max(2, Math.round(up * 0.3));
+        for (let k = -up; k <= down; k++) {
+            const i = (c + k + N) % N;
+            const f = k <= 0 ? 1 - (-k / up) ** 1.6 : 1 - k / down;
+            sp[i].y += j.h * Math.max(0, f);
+            if (i === 0) sp[N].y = sp[0].y;
+        }
+    }
     const S = [];
     for (let i = 0; i < N; i++) {
         const p = sp[i], a = sp[(i - 1 + N) % N], b = sp[i + 1];
@@ -50,9 +61,24 @@ export function buildTrack(def, TX) {
         const hB = (bk.base + bk.amp * pnoise(s, bk.seed + 7)) * (0.4 + 0.6 * calm);
         S.push({ x: p.x, y: p.y, z: p.z, tx, tz, sx: -tz, sz: tx, w: def.width, h: [hA, hB] });
     }
-    S.forEach((s) => { s.prof = [profile(s.w, s.h[0]), profile(s.w, s.h[1])]; });
+    S.forEach((s) => { s.prof = [profile(s.w, s.h[0], def.barrier), profile(s.w, s.h[1], def.barrier)]; });
+    // On the inside of a bend the ground beside the road must not reach past the bend's centre,
+    // or it folds back over the road. Clamp each side to the local turning radius.
+    const head = S.map((s) => Math.atan2(s.tx, s.tz));
+    const wrapA = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
+    const kappa = S.map((s, i) => wrapA(head[(i + 3) % N] - head[(i - 3 + N) % N]) / (6 * seg));
+    S.forEach((s, i) => {
+        let k = 0;
+        for (let j = -8; j <= 8; j++) { const v = kappa[(i + j + N) % N]; if (Math.abs(v) > Math.abs(k)) k = v; }
+        if (Math.abs(k) < 1e-4) return;
+        const inner = k > 0 ? 1 : 0;                   // heading increasing = turning left = left side is inside
+        const lim = Math.max(s.w / 2 + 2, 0.85 / Math.abs(k));
+        const p = s.prof[inner];
+        for (let n = 1; n < p.off.length; n++) p.off[n] = Math.min(p.off[n], Math.max(p.off[n - 1] + 0.15, lim - (p.off.length - 1 - n) * 0.15));
+        p.wall = Math.min(p.wall, p.off[3]);
+    });
 
-    const mat = (tex) => cel({ map: tex, side: THREE.DoubleSide });
+    const mat = (tex) => cel({ map: tex, side: THREE.DoubleSide }, false);
     const M = {
         road: mat(TX[def.surface]),
         verge: mat(TX.verge),
@@ -115,8 +141,8 @@ export function buildTrack(def, TX) {
     }
 
     /* ---------- the world around it ---------- */
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), mat(TX[def.terrain || 'grass']));
-    ground.material = cel({ map: TX[def.terrain || 'grass'].clone() });
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(6000, 6000), mat(TX[def.ground || def.terrain || 'grass']));
+    ground.material = cel({ map: TX[def.ground || def.terrain || 'grass'].clone() }, false);
     ground.material.map.repeat.set(500, 500); ground.material.map.needsUpdate = true;
     ground.rotation.x = -Math.PI / 2; ground.position.y = def.groundY;
     group.add(ground);
@@ -206,6 +232,8 @@ export function buildTrack(def, TX) {
     }
 
     const signs = addSigns({ S, N }, group);
+    const anim = [];
+    buildProps({ S, N, seg, group, def, TX, anim });
 
     /* ---------- queries ---------- */
     const query = (x, z, hint) => {
@@ -239,5 +267,5 @@ export function buildTrack(def, TX) {
         return { x: s.x + s.sx * o, z: s.z + s.sz * o, y: s.y, heading: Math.atan2(s.tx, s.tz), i };
     };
 
-    return { def, group, sky, S, N, L, seg, query, gridSlot, M, signs };
+    return { def, group, sky, S, N, L, seg, query, gridSlot, M, signs, animate: (t) => anim.forEach((f) => f(t)) };
 }

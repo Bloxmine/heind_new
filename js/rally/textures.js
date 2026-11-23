@@ -84,6 +84,26 @@ export function surfaceTextures() {
             x.fillStyle = 'rgba(60,20,10,0.5)';
             for (let y = 6; y < 64; y += 14) x.fillRect(0, y, 64, 2);
         }),
+        concrete: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#5a5c60', '#626468', '#56585c', '#5e6064'], 8, 41);
+            x.fillStyle = '#3a3c40'; x.fillRect(0, 31, 64, 1); x.fillRect(31, 0, 1, 64);
+            dots(x, w, h, ['#6e7074', '#4a4c50'], 40, 1, 2);
+        }),
+        container: make(32, 32, (x) => {
+            x.fillStyle = '#ffffff'; x.fillRect(0, 0, 32, 32);
+            x.fillStyle = '#c8c8c8'; for (let i = 1; i < 32; i += 3) x.fillRect(i, 2, 1, 28);
+            x.fillStyle = '#8a8a8a'; x.fillRect(0, 0, 32, 2); x.fillRect(0, 30, 32, 2);
+        }),
+        barrier: make(32, 8, (x) => {
+            x.fillStyle = '#b8b8b4'; x.fillRect(0, 0, 32, 8);
+            for (let i = 0; i < 32; i += 8) { x.fillStyle = '#e8c020'; x.fillRect(i, 1, 4, 3); x.fillStyle = '#1a1a1a'; x.fillRect(i + 4, 1, 4, 3); }
+            x.fillStyle = '#8a8a86'; x.fillRect(0, 6, 32, 2);
+        }, { mip: false }),
+        pool: make(32, 32, (x, w, h) => {
+            // a stylised light pool: three hard rings, brightest in the middle
+            x.clearRect(0, 0, w, h);
+            for (const [r, a] of [[15, 0.25], [11, 0.45], [6, 0.7]]) { x.fillStyle = `rgba(255,220,160,${a})`; x.beginPath(); x.arc(16, 16, r, 0, Math.PI * 2); x.fill(); }
+        }, { mip: false, clampS: true, clampT: true }),
         post: make(8, 16, (x) => {
             for (let i = 0; i < 4; i++) { x.fillStyle = i % 2 ? '#e8e8e8' : '#d8302a'; x.fillRect(0, i * 4, 8, 4); }
         }, { mip: false }),
@@ -152,8 +172,38 @@ export function skyTexture(sky) {
                 }
             }
         }
+        if (sky.kind === 'city') {
+            // a port city: blocks of buildings with lit windows, and a few red aircraft lights
+            let px = 0;
+            while (px < w) {
+                const bw = 6 + ((r() * 14) | 0), bh = 14 + ((r() * 40) | 0) * (r() < 0.15 ? 1.8 : 1);
+                const top = 100 - bh;
+                x.fillStyle = r() < 0.5 ? sky.far : sky.far2;
+                x.fillRect(px, top, bw, h - top);
+                for (let wy = top + 3; wy < 98; wy += 3) for (let wx = px + 1; wx < px + bw - 1; wx += 2) {
+                    if (r() < 0.22) { x.fillStyle = r() < 0.8 ? sky.window : sky.window2; x.fillRect(wx, wy, 1, 1); }
+                }
+                if (bh > 40) { x.fillStyle = '#ff3a3a'; x.fillRect(px + (bw >> 1), top - 1, 1, 1); }
+                px += bw + ((r() * 3) | 0);
+            }
+            x.fillStyle = sky.near; x.fillRect(0, 100, w, h - 100);
+            return;
+        }
         for (let px = 0; px < w; px++) {
             const u = px / w;
+            if (sky.kind === 'mesas') {
+                // flat-topped plateaus with steep sides
+                const m = pnoise(u, sky.seed || 3, 3) * 0.5 + 0.5;
+                const top = m > 0.55 ? 62 - (m - 0.55) * 40 : m > 0.4 ? 92 - (m - 0.4) * 200 : 94;
+                for (let y = Math.max(0, top | 0); y < h; y++) {
+                    const band = ((y - top) | 0) % 9 < 2;
+                    x.fillStyle = band ? sky.far2 : sky.far;
+                    x.fillRect(px, y, 1, 1);
+                }
+                const near = 100 - (pnoise(u, (sky.seed || 3) + 5, 4) * 0.5 + 0.5) * 8;
+                for (let y = near | 0; y < h; y++) { x.fillStyle = sky.near; x.fillRect(px, y, 1, 1); }
+                continue;
+            }
             const ridge = 1 - Math.abs(pnoise(u, sky.seed || 3, 6));               // sharp peaks
             const far = 92 - (ridge * 0.8 + (pnoise(u * 2, (sky.seed || 3) + 2, 3) * 0.5 + 0.5) * 0.35) * (sky.peaks || 44);
             for (let y = far | 0; y < h; y++) {

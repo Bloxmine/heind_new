@@ -37,7 +37,13 @@ export function makeCarMesh(spec) {
     const stripe = mat({ color: spec.stripe, flatShading: true });
     const glass = mat({ color: '#3a4a58', emissive: '#0a1016', flatShading: true });
     const dark = mat({ color: '#1c1c22', flatShading: true });
-    body.add(extrude(B.body, B.width, paint));
+    const shell = extrude(B.body, B.width, paint);
+    body.add(shell);
+    // from the driver's seat only the bonnet ahead of the windscreen should show, not the whole shell
+    const front = B.body.filter(([z]) => z >= B.cabin[0][0]);
+    const hood = extrude([...front, B.cabin[0], [B.cabin[0][0], B.body[0][1]]], B.width, paint);
+    hood.visible = false;
+    body.add(hood);
     const cabin = new THREE.Group();
     body.add(cabin);
     cabin.add(extrude(B.cabin.concat([[B.cabin[B.cabin.length - 1][0], 0.98], [B.cabin[0][0], 0.98]]), B.width - 0.22, glass));
@@ -51,9 +57,6 @@ export function makeCarMesh(spec) {
         p.position.set(sx * (B.width / 2 - 0.13), 1.25, -0.55);
         cabin.add(p);
     }
-    const glint = new THREE.Mesh(new THREE.BoxGeometry(B.width - 0.5, 0.05, 0.02), new THREE.MeshBasicMaterial({ color: '#e8f0f6' }));
-    glint.position.set(0, 1.28, -1.68); glint.rotation.x = -0.75; glint.rotation.z = 0.25;
-    cabin.add(glint);
     const hoodStripe = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.02, 1.3), stripe);
     hoodStripe.position.set(0, 0.99, 1.4); hoodStripe.rotation.x = 0.12;
     body.add(hoodStripe);
@@ -80,7 +83,7 @@ export function makeCarMesh(spec) {
         const hs = star('#fff0c8', 1.6); hs.position.set(sx * 0.58, 0.68, 2.18); body.add(hs);
         headStars.push(hs);
     }
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.14, 0.03), new THREE.MeshBasicMaterial({ color: '#f4f4f4' }));
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.11, 0.03), cel({ color: '#9a9ea4' }));
     plate.position.set(0, 0.55, -2.13); body.add(plate);
     const bump = new THREE.Mesh(new THREE.BoxGeometry(B.width - 0.1, 0.16, 0.2), dark);
     bump.position.set(0, 0.36, -2.06); body.add(bump);
@@ -102,7 +105,7 @@ export function makeCarMesh(spec) {
         root.add(pivot);
         wheels.push({ pivot, spin, front: z > 0 });
     }
-    return { root, body, cabin, wheels, B, tail, headStars };
+    return { root, body, cabin, shell, hood, wheels, B, tail, headStars };
 }
 
 /* ---------- handling ---------- */
@@ -115,7 +118,8 @@ export const SURF = {
     tarmac: { grip: 1.05, drag: 0.0, dust: null },
     verge: { grip: 0.7, drag: 0.35, dust: '#8a6a48' },
     grass: { grip: 0.62, drag: 0.6, dust: '#6aa822' },
-    rock: { grip: 0.6, drag: 0.7, dust: '#6e665c' }
+    rock: { grip: 0.6, drag: 0.7, dust: '#6e665c' },
+    concrete: { grip: 0.95, drag: 0.25, dust: null }
 };
 
 export class Car {
