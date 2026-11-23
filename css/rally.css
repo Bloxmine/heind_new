@@ -1,0 +1,93 @@
+/* Gravel Riot: HUD and title on top of game.css (which supplies the Mac chrome, panels and menus). */
+
+.rtitle .logo { top: calc(var(--px) * 14); font-size: calc(var(--px) * 30); }
+.rtitle .logo-word span {
+    background: linear-gradient(#ffffff 0 35%, #dde8ee 35% 62%, #9ca5ad 62%);
+    -webkit-background-clip: text; background-clip: text;
+    filter: drop-shadow(var(--px) 0 #07090c) drop-shadow(calc(var(--px) * -1) 0 #07090c) drop-shadow(0 var(--px) #07090c) drop-shadow(0 calc(var(--px) * -1) #07090c) drop-shadow(calc(var(--px) * 2) calc(var(--px) * 2) #4aa8ff) drop-shadow(var(--px) var(--px) #07090c);
+    font-style: italic;
+}
+.rtitle .logo-word .sp { width: calc(var(--px) * 8); }
+.rtitle .logo-sub { top: calc(var(--px) * 48); }
+.rtitle .menu { left: calc(var(--px) * 14); top: calc(var(--px) * 70); }
+
+/* HUD: inked manga panels. Slanted boxes with a thick ink border, a hard shadow, halftone dots,
+   Blur's blue for labels and italic outlined numbers. */
+.rhud {
+    inset: 0; pointer-events: none;
+    --hb: #4aa8ff; --ink: #07090c; --t: max(1px, calc(var(--px) * 1.1));
+    --outline: var(--t) 0 var(--ink), calc(var(--t) * -1) 0 var(--ink), 0 var(--t) var(--ink), 0 calc(var(--t) * -1) var(--ink), var(--t) var(--t) var(--ink), calc(var(--t) * -1) var(--t) var(--ink);
+}
+.rp {
+    position: absolute;
+    padding: calc(var(--px) * 3) calc(var(--px) * 7) calc(var(--px) * 3) calc(var(--px) * 6);
+    background:
+        radial-gradient(circle, rgba(74, 168, 255, 0.22) 30%, transparent 34%) 0 0 / calc(var(--px) * 3) calc(var(--px) * 3),
+        linear-gradient(#141a22, #0a0d12);
+    border: var(--t) solid var(--ink);
+    box-shadow: inset 0 0 0 var(--o) rgba(74, 168, 255, 0.6), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--ink);
+    transform: skewX(-12deg);
+    font-size: calc(var(--px) * 8);
+    line-height: 1.2;
+    color: #ffffff;
+    text-shadow: var(--outline);
+}
+.rp > * { transform: skewX(12deg); }
+.rp small { display: block; color: var(--hb); font-size: calc(var(--px) * 7); font-style: italic; }
+.rp b { display: block; font-weight: 400; color: #ffffff; }
+.rp span { display: block; color: var(--hb); font-style: italic; }
+.rp i { font-style: normal; color: #ffffff; }
+.rp-tl { left: calc(var(--px) * 7); top: calc(var(--px) * 5); }
+.rp-tr {
+    right: calc(var(--px) * 6); top: calc(var(--px) * 5);
+    padding: calc(var(--px) * 2);
+    transform: none; border-radius: 50%;
+    box-shadow: inset 0 0 0 var(--o) rgba(74, 168, 255, 0.7), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--ink);
+}
+.rp-tr > * { transform: none; }
+.rp-tr canvas { display: block; width: calc(var(--px) * 54); height: calc(var(--px) * 54); image-rendering: pixelated; border-radius: 50%; }
+.rp-br { right: calc(var(--px) * 9); bottom: calc(var(--px) * 6); text-align: right; padding-right: calc(var(--px) * 9); }
+.rp-br b {
+    font: italic 700 calc(var(--px) * 26) / 0.9 var(--f-logo); color: #ffffff; letter-spacing: calc(var(--px) * 0.5);
+    text-shadow: var(--outline), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--hb), calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
+}
+.rp-br small { color: var(--hb); }
+.rp-br span { color: #ffffff; font-style: italic; }
+.rp-br span i { color: #ffe23a; }
+/* messages: a slanted banner with speed-line stripes, like a manga sound effect panel */
+.rmsg {
+    position: absolute; left: 50%; top: calc(var(--px) * 34);
+    margin: 0; padding: calc(var(--px) * 3) calc(var(--px) * 12);
+    transform: translateX(-50%) skewX(-14deg) rotate(-2deg);
+    font: italic 700 calc(var(--px) * 13) / 1 var(--f-logo); color: #ffffff; white-space: nowrap;
+    background:
+        repeating-linear-gradient(90deg, transparent 0 calc(var(--px) * 6), rgba(74, 168, 255, 0.25) calc(var(--px) * 6) calc(var(--px) * 7)),
+        #0d1218;
+    border: var(--t) solid var(--ink);
+    box-shadow: inset 0 0 0 var(--o) var(--hb), calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
+    text-shadow: var(--outline), calc(var(--px) * 2) calc(var(--px) * 2) 0 var(--hb);
+}
+.rmsg.pop { animation: slam 1.6s steps(5) forwards; }
+@keyframes slam {
+    0% { transform: translateX(-50%) skewX(-14deg) rotate(-2deg) scale(1.7); }
+    12% { transform: translateX(-50%) skewX(-14deg) rotate(-2deg) scale(1); }
+    85% { opacity: 1; }
+    100% { opacity: 0; transform: translateX(-40%) skewX(-14deg) rotate(-2deg); }
+}
+.rwrong {
+    position: absolute; left: 50%; top: calc(var(--px) * 60); margin: 0;
+    padding: calc(var(--px) * 2) calc(var(--px) * 10);
+    transform: translateX(-50%) skewX(-14deg);
+    font: italic 700 calc(var(--px) * 15) / 1 var(--f-logo); color: #ffffff;
+    background: #c8102e; border: var(--t) solid var(--ink);
+    box-shadow: calc(var(--px) * 3) calc(var(--px) * 3) 0 var(--ink);
+    text-shadow: var(--outline);
+}
+[data-pal="dmg"] .rhud { --hb: #8bac0f; --ink: #0f380f; }
+[data-pal="dmg"] .rp, [data-pal="dmg"] .rmsg { background: #306230; }
+
+/* touch controls */
+.touch .rtouch { gap: 8px; }
+.rtouch .steer { min-width: 64px; font-size: 22px; }
+.rtouch .tbtn.down { background: linear-gradient(#ff9a1f, #e8562a); }
+.rtouch .tb-hint { font-size: 11px; }

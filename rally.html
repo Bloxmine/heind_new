@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gravel Riot</title>
+<meta name="description" content="Gravel Riot: a dithered, low-poly rally racer by Hein Dijstelbloem, in the style of early-2000s phone 3D games.">
+<meta name="theme-color" content="#0b1530">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230b1530'/%3E%3Crect x='3' y='5' width='10' height='5' fill='%235b46d8'/%3E%3Crect x='5' y='3' width='6' height='3' fill='%239fd8f5'/%3E%3Crect x='3' y='10' width='3' height='3' fill='%23111'/%3E%3Crect x='10' y='10' width='3' height='3' fill='%23111'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/rally.css">
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body data-mode="title">
+
+<header class="menubar">
+    <ul class="mb">
+        <li class="mb-item">
+            <button type="button" class="mb-btn mb-logo" aria-expanded="false" aria-label="Anchor menu"><i class="ico ico-anchor"></i></button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="about">About Gravel Riot&hellip;</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="home">Back to heind.nl</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Race</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="drive">Test Drive</button></li>
+                <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
+                <li><button type="button" data-act="view">Cockpit / Chase View <kbd>C</kbd></button></li>
+                <li><button type="button" data-act="full"><i class="chk"></i>Full Screen <kbd>F</kbd></button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="quit">Quit to Title</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Options</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-opt="sound"><i class="chk"></i>Sound</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="look:night"><i class="chk"></i>Night Drive</button></li>
+                <li><button type="button" data-opt="look:sea"><i class="chk"></i>SeaOS Colour</button></li>
+                <li><button type="button" data-opt="look:java"><i class="chk"></i>Java 4096</button></li>
+                <li><button type="button" data-opt="look:dmg"><i class="chk"></i>DMG Green</button></li>
+                <li><button type="button" data-opt="look:raw"><i class="chk"></i>No Dither</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="fps:60"><i class="chk"></i>60 fps</button></li>
+                <li><button type="button" data-opt="fps:30"><i class="chk"></i>30 fps</button></li>
+                <li><button type="button" data-opt="fps:15"><i class="chk"></i>15 fps (authentic)</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="lines"><i class="chk"></i>Speed Lines</button></li>
+                <li><button type="button" data-opt="ink"><i class="chk"></i>Ink Outlines</button></li>
+                <li><button type="button" data-opt="glow"><i class="chk"></i>Light Glow</button></li>
+                <li><button type="button" data-opt="crt"><i class="chk"></i>Scanlines</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Help</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="help">Controls</button></li>
+                <li><button type="button" data-act="zoom">Zoom Window</button></li>
+            </ul>
+        </li>
+    </ul>
+    <div class="mb-right"><span class="clock" id="clock"></span><span class="mb-app"><i class="ico ico-sub"></i><span class="hide-xs">Gravel Riot</span></span></div>
+</header>
+
+<main class="desk">
+    <a class="desk-icon" href="index.html"><i class="di-home"></i><span>heind.nl</span></a>
+
+    <section class="win gamewin" id="gamewin" aria-label="Gravel Riot">
+        <div class="mac-title">
+            <button type="button" class="box box-close" aria-label="Quit"></button>
+            <span class="mt-name"><span>Gravel Riot</span></span>
+            <button type="button" class="box box-zoom" aria-label="Zoom"></button>
+            <button type="button" class="box box-shade" aria-label="Collapse"></button>
+        </div>
+        <div class="win-body game-body">
+            <div id="screen" class="screen crt">
+                <canvas id="game" width="320" height="180" aria-label="Game screen"></canvas>
+                <div class="scan" aria-hidden="true"></div>
+                <button type="button" class="fs-exit" data-act="full" aria-label="Exit full screen">&#10005; EXIT FULL SCREEN <kbd>F</kbd></button>
+                <p id="loading" class="ov loading">LOADING&hellip;</p>
+
+                <div class="ov title rtitle" id="title" hidden>
+                    <h1 class="logo" aria-label="Gravel Riot"><span class="logo-word"></span></h1>
+                    <p class="logo-sub">~ dirt roads, real cars, unreal power-ups ~</p>
+                    <div class="menu" id="title-menu">
+                        <button type="button" data-act="drive">TEST DRIVE</button>
+                        <button type="button" data-cycle="look">LOOK &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
+                        <button type="button" data-cycle="view">CAMERA &#9664;<b>CHASE</b>&#9654;</button>
+                        <button type="button" data-cycle="weather">WEATHER &#9664;<b>DRY</b>&#9654;</button>
+                        <button type="button" data-cycle="lines">SPEED LINES <b>ON</b></button>
+                        <button type="button" data-cycle="fps">FRAMES &#9664;<b>30 FPS</b>&#9654;</button>
+                        <button type="button" data-cycle="wobble">WOBBLE &#9664;<b>ON</b>&#9654;</button>
+                        <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
+                    </div>
+                    <p class="copy">EARLY BUILD &middot; CHECKPOINT 1 &middot; &copy; 2026 HEIN DIJSTELBLOEM</p>
+                </div>
+
+                <div class="ov rhud" id="hud" hidden>
+                    <div class="rp rp-tl">
+                        <small>TEST DRIVE</small>
+                        <b id="h-track">ALPINE PASS</b>
+                        <span>LAP <i id="h-lap">1</i></span>
+                        <span>TIME <i id="h-time">-:--.--</i></span>
+                        <span>BEST <i id="h-best">-:--.--</i></span>
+                    </div>
+                    <div class="rp rp-tr"><canvas id="minimap" width="64" height="64"></canvas></div>
+                    <div class="rp rp-br"><b id="h-speed">0</b><small>KM/H</small><span>GEAR <i id="h-gear">1</i></span></div>
+                    <p class="rmsg" id="h-msg" hidden></p>
+                    <p class="rwrong blink" id="h-wrong" hidden>WRONG WAY!</p>
+                </div>
+
+                <div class="ov panel" id="pause" hidden>
+                    <h2>PAUSED</h2>
+                    <div class="menu">
+                        <button type="button" data-act="resume">RESUME</button>
+                        <button type="button" data-act="restart">RESTART</button>
+                        <button type="button" data-cycle="look">LOOK &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
+                        <button type="button" data-cycle="view">CAMERA &#9664;<b>CHASE</b>&#9654;</button>
+                        <button type="button" data-cycle="sound">SOUND <b>ON</b></button>
+                        <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
+                        <button type="button" data-act="quit">QUIT TO TITLE</button>
+                    </div>
+                </div>
+            </div>
+            <div class="touchbar rtouch" id="touchbar">
+                <button type="button" class="tbtn steer" data-touch="left" aria-label="Steer left">&#9664;</button>
+                <button type="button" class="tbtn steer" data-touch="right" aria-label="Steer right">&#9654;</button>
+                <span class="tb-hint">auto throttle</span>
+                <button type="button" class="tbtn small" data-touch="hand">HAND<br>BRAKE</button>
+                <button type="button" class="tbtn small" data-touch="brake">BRAKE</button>
+                <button type="button" class="tbtn small" data-act="view" aria-label="Camera">CAM</button>
+                <button type="button" class="tbtn small" data-act="pause" aria-label="Pause">II</button>
+            </div>
+        </div>
+        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE handbrake &middot; C camera &middot; R reset &middot; P pause &middot; F full screen</span><span class="grow"></span></div>
+    </section>
+</main>
+<div id="dialogs"></div>
+
+<script>window.SEA = window.SEA || {};</script>
+<script src="js/dither.js"></script>
+<script type="module" src="js/rally/main.js"></script>
+</body>
+</html>
