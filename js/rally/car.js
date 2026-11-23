@@ -192,7 +192,11 @@ export const SURF = {
     verge: { grip: 0.7, drag: 0.35, dust: '#8a6a48' },
     grass: { grip: 0.62, drag: 0.6, dust: '#6aa822' },
     rock: { grip: 0.6, drag: 0.7, dust: '#6e665c' },
-    concrete: { grip: 0.95, drag: 0.25, dust: null }
+    concrete: { grip: 0.95, drag: 0.25, dust: null },
+    mud: { grip: 0.7, drag: 0.05, dust: '#4a3424' },
+    jungle: { grip: 0.6, drag: 0.6, dust: '#2e6430' },
+    cobble: { grip: 0.94, drag: 0.01, dust: null },
+    stone: { grip: 0.6, drag: 0.7, dust: '#6a6e5e' }
 };
 
 export class Car {

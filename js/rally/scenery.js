@@ -67,7 +67,7 @@ export const PROPS = {
         group.add(instanced(new THREE.DodecahedronGeometry(1, 0), cel({ map: TX[o.tex || 'rock'] }), mats));
     },
     // jersey barriers right beside the road; the track builder also turns them into walls
-    barriers(ctx) {
+    barriers(ctx, o) {
         const { S, group, TX } = ctx, mats = [];
         const geo = new THREE.BoxGeometry(0.5, 0.9, ctx.seg * 1.02); geo.translate(0, 0.45, 0);
         for (let i = 0; i < S.length; i++) {
@@ -78,7 +78,7 @@ export const PROPS = {
                 mats.push(place((ax + bx) / 2, (s.y + n.y) / 2, (az + bz) / 2, Math.atan2(bx - ax, bz - az)));
             }
         }
-        group.add(instanced(geo, cel({ map: TX.barrier }), mats));
+        group.add(instanced(geo, cel({ map: TX[o.tex || 'barrier'] }), mats));
     },
     // stacks of shipping containers along the docks
     containers(ctx, o) {
@@ -139,11 +139,12 @@ export const PROPS = {
         for (let i = 6, k = 0; i < S.length; i += every, k++) {
             const side = k % 2, s = S[i], off = s.w / 2 + (o.inset || 2.6);
             const b = beside(S, i, side, off);
-            const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, 11, 0.3), pole); p.position.set(b.x, s.y + 5.5, b.z); group.add(p);
+            const H = o.height || 11;
+            const p = new THREE.Mesh(new THREE.BoxGeometry(0.3, H, 0.3), pole); p.position.set(b.x, s.y + H / 2, b.z); group.add(p);
             const toward = beside(S, i, side, off - 2.4);
-            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 2.6), pole); arm.position.set((b.x + toward.x) / 2, s.y + 11, (b.z + toward.z) / 2);
+            const arm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 2.6), pole); arm.position.set((b.x + toward.x) / 2, s.y + H, (b.z + toward.z) / 2);
             arm.rotation.y = Math.atan2(toward.x - b.x, toward.z - b.z); group.add(arm);
-            const h = glows(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.25, 0.6), head)); h.position.set(toward.x, s.y + 10.8, toward.z); h.rotation.y = arm.rotation.y; group.add(h);
+            const h = glows(new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.25, 0.6), head)); h.position.set(toward.x, s.y + H - 0.2, toward.z); h.rotation.y = arm.rotation.y; group.add(h);
             const at = beside(S, i, side, s.w * 0.2);
             const pm = new THREE.Mesh(poolGeo, pool); pm.position.set(at.x, s.y + 0.07, at.z); pm.renderOrder = 2; group.add(pm);
         }
@@ -152,7 +153,7 @@ export const PROPS = {
     neon(ctx, o) {
         const { S, group } = ctx;
         const i = o.at || 40, side = o.side || 0;
-        const b = beside(S, i, side, S[i].w / 2 + 9);
+        const b = beside(S, i, side, S[i].w / 2 + (o.dist || 9));
         const g = new THREE.Group();
         const post = new THREE.Mesh(new THREE.BoxGeometry(0.4, 7, 0.4), cel({ color: '#3a3e44' })); post.position.y = 3.5; g.add(post);
         const board = glows(new THREE.Mesh(new THREE.PlaneGeometry(6.4, 2.4), new THREE.MeshBasicMaterial({ map: neonTex(o.text || 'CAFE', o.a || '#3ad0ff', o.b || '#ff3a6e'), side: THREE.DoubleSide })));
@@ -163,6 +164,133 @@ export const PROPS = {
         g.rotation.y = yaw(S[i]) + Math.PI + (side ? -0.5 : 0.5);
         group.add(g);
     }
+};
+
+// --- town and city ---
+// gabled houses in pastel colours shoulder to shoulder along the street
+PROPS.houses = (ctx, o) => {
+    const { S, group, TX } = ctx, r = rng(101);
+    const cols = ['#e8d8b8', '#d8b0a0', '#b8c8d8', '#e8e0a8', '#c8d8b8', '#e0c0c8', '#f0e8e0'];
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    const prism = new THREE.CylinderGeometry(0.72, 0.72, 1, 3); prism.rotateX(-Math.PI / 2); prism.scale(0.8, 0.5, 1);   // ridge along the street
+    const walls = [], wallCol = [], roofs = [];
+    for (let i = 0; i < S.length; i += 4) for (let side = 0; side < 2; side++) {
+        if (r() < (o.gaps || 0.12)) continue;
+        const s = S[i], depth = 8 + r() * 4, wid = 7.6 + r() * 1.5, hgt = 7 + r() * (o.tall || 6);
+        const off = s.w / 2 + (o.inset || 4) + depth / 2;
+        const b = beside(S, i, side, off);
+        if (!clear(S, b.x, b.z, s.w / 2 + 3.5 + depth / 2 - 1)) continue;
+        const yaw0 = yaw(s);
+        walls.push(place(b.x, s.y - 0.5, b.z, yaw0, depth, hgt, wid));
+        wallCol.push(cols[(r() * cols.length) | 0]);
+        roofs.push(place(b.x, s.y - 0.5 + hgt + 0.76, b.z, yaw0, depth * 1.06, 4.2, wid * 1.02));
+    }
+    const wm = cel({ map: TX.facade });
+    group.add(instanced(box, wm, walls, wallCol));
+    group.add(instanced(prism, cel({ map: TX.roof }), roofs));
+};
+// a church tower with a spire, near the road
+PROPS.church = (ctx, o) => {
+    const { S, group, TX } = ctx;
+    const i = o.at || 60, s = S[i], b = beside(S, i, o.side || 1, s.w / 2 + 14);
+    const g = new THREE.Group();
+    const tower = new THREE.Mesh(new THREE.BoxGeometry(7, 26, 7), cel({ map: TX.stone }));
+    tower.position.y = 13; g.add(tower);
+    const spire = new THREE.Mesh(new THREE.ConeGeometry(5.2, 14, 4), cel({ color: '#3a5a6a' }));
+    spire.position.y = 33; spire.rotation.y = Math.PI / 4; g.add(spire);
+    const clock = glows(new THREE.Mesh(new THREE.CircleGeometry(1.6, 12), new THREE.MeshBasicMaterial({ color: '#ffe8b0' })));
+    clock.position.set(0, 20, 3.55); g.add(clock);
+    g.position.set(b.x, s.y - 1, b.z); g.rotation.y = yaw(s);
+    group.add(g);
+};
+// skyscrapers with lit windows, an aircraft light on top
+PROPS.towers = (ctx, o) => {
+    const { S, group, TX, anim } = ctx, r = rng(131);
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    const mats = [], tops = [];
+    for (let i = 0; i < S.length; i += 6) for (let side = 0; side < 2; side++) {
+        if (r() < 0.25) continue;
+        const s = S[i], w = 14 + r() * 12, h = 30 + r() * (o.tall || 70);
+        const b = beside(S, i, side, s.w / 2 + 10 + w / 2 + r() * 12);
+        if (!clear(S, b.x, b.z, s.w / 2 + 8 + w / 2)) continue;
+        mats.push(place(b.x, s.y - 1, b.z, yaw(s) + (r() - 0.5) * 0.2, w, h, w * (0.7 + r() * 0.5)));
+        if (h > 60) tops.push([b.x, s.y + h, b.z]);
+    }
+    const tex = TX.windows.clone(); tex.repeat.set(1.5, 3); tex.needsUpdate = true;
+    group.add(instanced(box, cel({ map: tex, emissive: '#ffffff', emissiveMap: tex }), mats));
+    const blink = [];
+    for (const [x, y, z] of tops) { const l = glows(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshBasicMaterial({ color: '#ff2a2a', fog: false }))); l.position.set(x, y + 0.5, z); group.add(l); blink.push(l); }
+    anim.push((t) => blink.forEach((l, k) => { l.visible = Math.floor(t * 1.1 + k * 0.29) % 2 === 0; }));
+};
+// lots of neon signs along the road
+PROPS.neons = (ctx, o) => {
+    const words = o.words || ['HOTEL', 'ARCADE', 'NOODLES', '24H', 'KARAOKE', 'CLUB', 'TAXI', 'DINER'];
+    const pairs = [['#3ad0ff', '#ff3a6e'], ['#ff3a6e', '#ffe23a'], ['#b04aff', '#3ad0ff'], ['#4aff7a', '#ff9a3a']];
+    const r = rng(151);
+    for (let i = 20, k = 0; i < ctx.S.length - 10; i += o.every || 34, k++) {
+        const [a, b] = pairs[k % pairs.length];
+        PROPS.neon(ctx, { at: i, side: k % 2, text: words[k % words.length], a, b, dist: 7 + r() * 4 });
+    }
+};
+// --- stadium ---
+// grandstands full of crowd around the outside of the bowl
+PROPS.stands = (ctx, o) => {
+    const { S, group, TX } = ctx, r = rng(171);
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    const steps = [], roofs = [];
+    for (let i = 0; i < S.length; i += 5) for (let side = 0; side < 2; side++) {
+        const s = S[i];
+        for (let row = 0; row < 4; row++) {
+            const b = beside(S, i, side, s.w / 2 + 7 + row * 2.4);
+            if (!clear(S, b.x, b.z, s.w / 2 + 5)) break;
+            steps.push(place(b.x, s.y - 0.5, b.z, yaw(s), 2.4, 1.2 + row * 1.4, ctx.seg * 5.2));
+            if (row === 3) roofs.push(place(beside(S, i, side, s.w / 2 + 13).x, s.y + 9, beside(S, i, side, s.w / 2 + 13).z, yaw(s), 9, 0.4, ctx.seg * 5.2));
+        }
+    }
+    const crowd = TX.crowd.clone(); crowd.repeat.set(1, 1); crowd.needsUpdate = true;
+    group.add(instanced(box, cel({ map: crowd }), steps));
+    group.add(instanced(box, cel({ color: '#2a3139' }), roofs));
+};
+// floodlight towers: tall masts with a bank of lights, pooling on the arena floor
+PROPS.towerLights = (ctx, o) => {
+    const { S, group, TX } = ctx;
+    const mast = cel({ color: '#4a4e56' }), lamp = new THREE.MeshBasicMaterial({ color: '#fff4d8', fog: false });
+    const pool = new THREE.MeshBasicMaterial({ map: TX.pool, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, color: '#fff0c8' });
+    const poolGeo = new THREE.PlaneGeometry(40, 40); poolGeo.rotateX(-Math.PI / 2);
+    for (let k = 0; k < (o.count || 6); k++) {
+        const i = Math.floor((k + 0.5) / (o.count || 6) * S.length), side = k % 2, s = S[i];
+        const b = beside(S, i, side, s.w / 2 + 22);
+        const m = new THREE.Mesh(new THREE.BoxGeometry(1, 30, 1), mast); m.position.set(b.x, s.y + 15, b.z); group.add(m);
+        const bank = glows(new THREE.Mesh(new THREE.BoxGeometry(6, 3, 0.6), lamp)); bank.position.set(b.x, s.y + 30, b.z); bank.lookAt(s.x, s.y, s.z); group.add(bank);
+        const at = beside(S, i, side, s.w * 0.1);
+        const pm = new THREE.Mesh(poolGeo, pool); pm.position.set(at.x, s.y + 0.08, at.z); pm.renderOrder = 2; group.add(pm);
+    }
+};
+// --- jungle ---
+// stepped temple pyramids in the jungle, and fallen stone blocks near the road
+PROPS.ruins = (ctx, o) => {
+    const { S, group, TX } = ctx, r = rng(191);
+    const stone = cel({ map: TX.stone });
+    for (let n = 0, tries = 0; n < (o.count || 5) && tries < 300; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, off = 40 + r() * 70;
+        const p = beside(S, i, side, off);
+        if (!clear(S, p.x, p.z, 34)) continue;
+        const g = new THREE.Group(), w = 24 + r() * 10;
+        for (let k = 0; k < 5; k++) { const m = new THREE.Mesh(new THREE.BoxGeometry(w - k * 4.4, 4, w - k * 4.4), stone); m.position.y = k * 4 + 2; g.add(m); }
+        const shrine = new THREE.Mesh(new THREE.BoxGeometry(5, 5, 5), stone); shrine.position.y = 22.5; g.add(shrine);
+        g.position.set(p.x, S[i].y + Math.max(0, S[i].h[side]) - 2, p.z); g.rotation.y = r() * 3;
+        group.add(g); n++;
+    }
+    const blocks = [];
+    for (let i = 8; i < S.length; i += 9) {
+        if (r() > 0.5) continue;
+        const side = r() < 0.5 ? 0 : 1, s = S[i], p = s.prof[side];
+        if (p.drop) continue;
+        const b = beside(S, i, side, p.off[2] + 1 + r() * 4);
+        const sc = 1 + r() * 1.5;
+        blocks.push(place(b.x, s.y + p.hy[2] + sc * 0.4, b.z, r() * 3, sc * 1.6, sc, sc));
+    }
+    group.add(instanced(new THREE.BoxGeometry(1, 1, 1), stone, blocks));
 };
 
 export function buildProps(ctx) {

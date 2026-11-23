@@ -27,7 +27,7 @@ const title = (s) => s.charAt(0) + s.slice(1).toLowerCase();
 const CFG = Object.assign({ look: 'night', fps: 30, wobble: 1, crt: true, sound: true, lines: true, ink: true, glow: true, view: 'chase', weather: 'auto', track: 'alpine', car: 'volta', targets: true, diff: 'normal', music: true }, store.get('heind.rally', {}));
 const DIFFS = { easy: { name: 'EASY', skill: 0.84 }, normal: { name: 'NORMAL', skill: 0.91 }, hard: { name: 'HARD', skill: 0.98 } };
 if (!DIFFS[CFG.diff]) CFG.diff = 'normal';
-const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2' };
+const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2', stadium: 'race2', jungle: 'race3', oldtown: 'race1', neon: 'race2' };
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
 const WEATHERS = ['auto', 'dry', 'rain', 'snow'];
 if (!WEATHERS.includes(CFG.weather)) CFG.weather = 'auto';
@@ -620,7 +620,7 @@ function engineSound() {
     const lo = gears[g - 1], hi = gears[g];
     let rpm = 0.25 + 0.75 * clamp((r - lo) / (hi - lo), 0, 1);
     if (!car.ground) rpm = Math.min(1, rpm + inp.throttle * 0.3);
-    const rough = { dirt: 0.5, gravel: 0.7, sand: 0.6, snow: 0.3, tarmac: 0.05, verge: 0.8, grass: 0.9 }[car.q.surface] || 0.5;
+    const rough = { dirt: 0.5, gravel: 0.7, sand: 0.6, snow: 0.3, tarmac: 0.05, verge: 0.8, grass: 0.9, mud: 0.6, cobble: 0.8, jungle: 0.9, concrete: 0.1 }[car.q.surface] || 0.5;
     lastRpm = rpm; lastGear = g;
     audio.update(mode === 'drive' ? rpm : 0.2, paused ? 0 : inp.throttle, paused ? 0 : car.slip, paused || mode !== 'drive' ? 0 : car.speed, rough, !car.ground);
 }

@@ -60,5 +60,63 @@ export const TRACKS = [
         terrain: 'concrete', cliff: 'concrete', ground: 'concrete',
         props: { barriers: true, containers: true, cranes: { count: 6 }, floodlights: { every: 24, color: '#ffd8a0' } },
         headlights: 1
+    },
+    {
+        id: 'stadium', name: 'MUD BOWL ARENA', blurb: 'a floodlit stadium, tyre walls and big jumps',
+        surface: 'dirt', width: 12, groundY: -2, laps: 4, weather: 'dry', barrier: true,
+        points: [[0, 0, 0], [70, 0, 0], [105, 18, 0], [112, 55, 0], [88, 80, 0], [50, 74, 0], [30, 48, 0], [0, 40, 0], [-30, 60, 0],
+            [-70, 62, 0], [-100, 35, 0], [-95, -5, 0], [-55, -18, 0]],
+        jumps: [{ at: 0.28, h: 3, len: 22 }, { at: 0.72, h: 3.4, len: 24 }],
+        bank: { base: 0.3, amp: 0.1, seed: 5 },
+        sky: { kind: 'city', top: '#06080e', horizon: '#1a2030', far: '#10141c', far2: '#141a24', near: '#0a0c10', window: '#fff4d8', window2: '#ffe23a', seed: 21 },
+        fog: '#141a24', fogNear: 60, fogFar: 320,
+        light: { sun: '#c8d0e0', amb: '#5a6278', ground: '#2a2420', dir: [0.2, 0.8, 0.3], disc: '#141a24' },
+        trees: { kinds: [], density: 0 },
+        terrain: 'dirt', cliff: 'rock', ground: 'dirt',
+        props: { barriers: { tex: 'tires' }, stands: true, towerLights: { count: 6 } },
+        headlights: 0.6
+    },
+    {
+        id: 'jungle', name: 'JADE JUNGLE', blurb: 'mud, palms and old temples in the rain',
+        surface: 'mud', width: 11, groundY: -30, laps: 3, weather: 'rain',
+        points: [[0, 0, 0], [90, 25, 3], [170, 10, 6], [230, 60, 4], [225, 140, 8], [160, 185, 12], [80, 160, 8], [30, 200, 4],
+            [-50, 190, 2], [-120, 140, 5], [-150, 60, 3], [-110, 0, 1], [-50, -20, 0]],
+        jumps: [{ at: 0.55, h: 2.4, len: 24 }],
+        bank: { base: 5, amp: 7, seed: 31 },
+        sky: { top: '#1a2a22', horizon: '#7a9a6a', far: '#2a4a32', far2: '#24402c', near: '#14281a', near2: '#10221a', clouds: '#5a6a5a', cloudsDark: '#3a4a3a', peaks: 50, seed: 13 },
+        fog: '#5a7a5a', fogNear: 40, fogFar: 300,
+        light: { sun: '#e8f0c8', amb: '#6a8a6a', ground: '#2a3a1a', dir: [0.4, 0.6, 0.2], disc: '#fff8d0' },
+        trees: { kinds: ['palm', 'fern', 'leaf'], density: 1.3 },
+        terrain: 'jungle', cliff: 'stone', ground: 'jungle',
+        props: { ruins: { count: 6 }, rocks: { density: 0.2, tex: 'stone' } },
+        headlights: 0.5
+    },
+    {
+        id: 'oldtown', name: 'OLD TOWN', blurb: 'cobbles, tight corners and a church tower',
+        surface: 'cobble', roadRepeat: 3, width: 9.5, groundY: -3, laps: 3, weather: 'dry', barrier: true,
+        points: [[0, 0, 0], [80, 0, 1], [110, 15, 2], [118, 50, 3], [100, 80, 3], [60, 90, 2], [40, 120, 1], [10, 140, 0], [-40, 135, 0],
+            [-70, 110, 0], [-75, 60, 1], [-60, 25, 1], [-30, 5, 0]],
+        bank: { base: 0.2, amp: 0.1, seed: 7 },
+        sky: { kind: 'roofs', top: '#2a2440', horizon: '#e89a6a', far: '#3a3040', far2: '#342a3a', near: '#2a2228', window: '#ffd27a', clouds: '#6a5060', cloudsDark: '#4a3a48', seed: 17 },
+        fog: '#8a6a6a', fogNear: 60, fogFar: 300,
+        light: { sun: '#ffc890', amb: '#8a7a9a', ground: '#4a3a30', dir: [-0.5, 0.3, 0.4], disc: '#ffd8a0' },
+        trees: { kinds: [], density: 0 },
+        terrain: 'cobble', cliff: 'stone', ground: 'cobble',
+        props: { barriers: { tex: 'stone' }, houses: { inset: 4.5, tall: 6 }, church: { at: 80, side: 0 }, floodlights: { every: 14, color: '#ffd27a', height: 5, inset: 2.4 } },
+        headlights: 0.7
+    },
+    {
+        id: 'neon', name: 'NEON DISTRICT', blurb: 'downtown at night, an overpass and a lot of neon',
+        surface: 'tarmac', width: 14, groundY: -3, laps: 3, weather: 'dry', barrier: true,
+        points: [[0, 0, 0], [150, 0, 0], [185, 20, 2], [195, 60, 5], [190, 140, 8], [170, 180, 6], [120, 195, 3], [20, 190, 0], [-30, 175, 0],
+            [-60, 140, 0], [-60, 40, 0], [-40, 10, 0]],
+        bank: { base: 0.2, amp: 0.1, seed: 9 },
+        sky: { kind: 'city', top: '#0a0618', horizon: '#3a1a4a', far: '#140c24', far2: '#1c1030', near: '#0a0612', window: '#ff3a6e', window2: '#3ad0ff', seed: 29 },
+        fog: '#2a1a3a', fogNear: 50, fogFar: 360,
+        light: { sun: '#a08ac8', amb: '#5a4a8a', ground: '#1a1024', dir: [0.3, 0.7, 0.2], disc: '#2a1a3a' },
+        trees: { kinds: [], density: 0 },
+        terrain: 'concrete', cliff: 'concrete', ground: 'concrete',
+        props: { barriers: true, towers: { tall: 80 }, neons: { every: 30 }, floodlights: { every: 20, color: '#b04aff' } },
+        headlights: 1
     }
 ];

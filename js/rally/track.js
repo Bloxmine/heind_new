@@ -80,11 +80,12 @@ export function buildTrack(def, TX) {
 
     const mat = (tex) => cel({ map: tex, side: THREE.DoubleSide }, false);
     const M = {
-        road: mat(TX[def.surface]),
+        road: mat(def.roadRepeat ? Object.assign(TX[def.surface].clone(), { needsUpdate: true }) : TX[def.surface]),
         verge: mat(TX.verge),
         terrain: mat(TX[def.terrain || 'grass']),
         cliff: mat(TX[def.cliff || 'rock'])
     };
+    if (def.roadRepeat) M.road.map.repeat.set(def.roadRepeat, def.roadRepeat);
 
     /* ---------- road ribbon ---------- */
     {
