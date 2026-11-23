@@ -1,0 +1,5 @@
+# Nobody reads the logbook file directly; it goes through guestbook.php.
+Require all denied
+<IfModule !mod_authz_core.c>
+    Deny from all
+</IfModule>

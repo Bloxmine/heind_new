@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Subshootica DX</title>
+<meta name="description" content="Subshootica DX: a low-poly, dithered submarine shoot 'em up by Hein Dijstelbloem. Dive four zones deep and take back the Great Pearl from the Takoyaki Clan.">
+<meta name="theme-color" content="#0b1530">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Subshootica DX">
+<meta property="og:description" content="Dive four zones deep and take back the Great Pearl from the Takoyaki Clan.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%230b1530'/%3E%3Crect x='2' y='7' width='12' height='5' fill='%233f9446'/%3E%3Crect x='6' y='4' width='4' height='3' fill='%239bdc5a'/%3E%3Crect x='4' y='9' width='2' height='1' fill='%23ffd23f'/%3E%3Crect x='8' y='9' width='2' height='1' fill='%23ffd23f'/%3E%3Crect x='14' y='8' width='1' height='3' fill='%23d9bd84'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+
+<header class="menubar">
+    <ul class="mb">
+        <li class="mb-item">
+            <button type="button" class="mb-btn mb-logo" aria-expanded="false" aria-label="Anchor menu"><i class="ico ico-anchor"></i></button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="about">About Subshootica DX&hellip;</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="home">Back to heind.nl</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Game</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="new">New Game <kbd>N</kbd></button></li>
+                <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
+                <li><button type="button" data-act="full"><i class="chk"></i>Full Screen <kbd>F</kbd></button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="story">Story</button></li>
+                <li><button type="button" data-act="scores">Hi-Scores</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="quit">Quit to Title</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Options</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-opt="sfx"><i class="chk"></i>Sound Effects</button></li>
+                <li><button type="button" data-opt="music"><i class="chk"></i>Music</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="pal:sea"><i class="chk"></i>SeaOS Colour</button></li>
+                <li><button type="button" data-opt="pal:dmg"><i class="chk"></i>DMG Green</button></li>
+                <li><button type="button" data-opt="pal:vsub"><i class="chk"></i>Virtual Sub</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="crt"><i class="chk"></i>Scanlines</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="diff:rookie"><i class="chk"></i>Rookie</button></li>
+                <li><button type="button" data-opt="diff:captain"><i class="chk"></i>Captain</button></li>
+                <li><button type="button" data-opt="diff:kraken"><i class="chk"></i>Kraken</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Help</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="howto">How to Play</button></li>
+                <li><button type="button" data-act="zoom">Zoom Window</button></li>
+            </ul>
+        </li>
+    </ul>
+    <div class="mb-right"><span class="clock" id="clock"></span><span class="mb-app"><i class="ico ico-sub"></i><span class="hide-xs">Subshootica</span></span></div>
+</header>
+
+<main class="desk">
+    <a class="desk-icon" href="index.html"><i class="di-home"></i><span>heind.nl</span></a>
+
+    <section class="win gamewin" id="gamewin" aria-label="Subshootica DX">
+        <div class="mac-title">
+            <button type="button" class="box box-close" aria-label="Quit"></button>
+            <span class="mt-name"><span>Subshootica DX</span></span>
+            <button type="button" class="box box-zoom" aria-label="Zoom"></button>
+            <button type="button" class="box box-shade" aria-label="Collapse"></button>
+        </div>
+        <div class="win-body game-body">
+            <div id="screen" class="screen crt" data-mode="boot">
+                <canvas id="game" width="240" height="160" aria-label="Game screen"></canvas>
+                <button type="button" class="fs-exit" data-act="full" aria-label="Exit full screen">&#10005; EXIT FULL SCREEN <kbd>F</kbd></button>
+                <div class="scan" aria-hidden="true"></div>
+                <p id="loading" class="ov loading">LOADING&hellip;</p>
+
+                <div class="ov hud" id="hud" hidden>
+                    <div class="hud-top"><span>SCORE <b id="h-score">0000000</b></span><span id="h-depth">0 m</span><span>HI <b id="h-hi">0000000</b></span></div>
+                    <div class="hud-bot"><span id="h-lives"></span><span id="h-bombs"></span><span id="h-power"></span><span id="h-extra" class="h-extra"></span></div>
+                </div>
+                <div class="ov bossbar" id="bossbar" hidden><span id="boss-name"></span><i><b id="boss-hp"></b></i></div>
+
+                <div class="ov title" id="title" hidden>
+                    <h1 class="logo" aria-label="Subshootica DX"><span class="logo-word"></span><span class="dx">DX</span></h1>
+                    <p class="logo-sub">~ the deep sea edition ~</p>
+                    <p class="press blink" id="press">PRESS START</p>
+                    <div class="menu" id="title-menu" hidden>
+                        <button type="button" data-act="new">NEW GAME</button>
+                        <button type="button" data-act="story">STORY</button>
+                        <button type="button" data-act="howto">HOW TO PLAY</button>
+                        <button type="button" data-act="scores">HI-SCORES</button>
+                        <button type="button" data-cycle="diff">LEVEL &#9664;<b>CAPTAIN</b>&#9654;</button>
+                        <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
+                        <button type="button" data-cycle="pal">LOOK &#9664;<b>SEAOS COLOUR</b>&#9654;</button>
+                    </div>
+                    <p class="copy">&copy; 2024&ndash;2026 HEIN DIJSTELBLOEM</p>
+                </div>
+
+                <div class="ov card" id="card" hidden><small id="card-n">STAGE 1</small><b id="card-name"></b><span id="card-depth"></span></div>
+                <div class="ov warn" id="warn" hidden><b class="blink">WARNING</b><span>A BOSS APPROACHES</span><strong id="warn-name"></strong><small id="warn-title"></small></div>
+                <div class="ov toast" id="toast" hidden></div>
+
+                <div class="ov talk" id="talk" hidden>
+                    <img class="talk-face" id="talk-face" alt="">
+                    <div class="talk-box"><b id="talk-who"></b><p id="talk-text"></p><i class="talk-more blink" aria-hidden="true">&#9660;</i></div>
+                </div>
+
+                <div class="ov panel tally" id="tally" hidden></div>
+
+                <div class="ov panel" id="pause" hidden>
+                    <h2>PAUSED</h2>
+                    <div class="menu">
+                        <button type="button" data-act="resume">RESUME</button>
+                        <button type="button" data-act="restart">RESTART STAGE</button>
+                        <button type="button" data-cycle="sound">SOUND <b>ON</b></button>
+                        <button type="button" data-cycle="music">MUSIC <b>ON</b></button>
+                        <button type="button" data-act="full">FULL SCREEN <b>OFF</b></button>
+                        <button type="button" data-act="quit">QUIT TO TITLE</button>
+                    </div>
+                </div>
+
+                <div class="ov panel" id="cont" hidden>
+                    <h2>CONTINUE?</h2>
+                    <b class="cont-n" id="cont-n">9</b>
+                    <p id="cont-left"></p>
+                    <div class="menu row"><button type="button" data-act="cont">YES!</button><button type="button" data-act="giveup">NO</button></div>
+                </div>
+
+                <div class="ov panel" id="over" hidden><h2 class="big">GAME OVER</h2><p id="over-score"></p><p class="dim">the Takoyaki Clan is having a party</p></div>
+
+                <div class="ov panel" id="entry" hidden>
+                    <h2>NEW HIGH SCORE!</h2>
+                    <p id="entry-score"></p>
+                    <form id="entry-form" autocomplete="off">
+                        <label for="entry-in">YOUR INITIALS</label>
+                        <input id="entry-in" maxlength="3" spellcheck="false" autocapitalize="characters" enterkeyhint="done">
+                        <button type="submit" class="pbtn">OK</button>
+                    </form>
+                </div>
+
+                <div class="ov panel" id="scores" hidden>
+                    <h2>HI-SCORES</h2>
+                    <ol class="scores" id="score-list"></ol>
+                    <div class="menu" data-back="back"><button type="button" data-act="back">BACK</button></div>
+                </div>
+
+                <div class="ov panel howto" id="howto" hidden>
+                    <h2>HOW TO PLAY</h2>
+                    <div class="how-cols">
+                        <dl class="keys">
+                            <dt>&larr; &uarr; &darr; &rarr; / WASD</dt><dd>steer</dd>
+                            <dt>Z / SPACE</dt><dd>torpedoes (hold)</dd>
+                            <dt>X / SHIFT</dt><dd>depth charge</dd>
+                            <dt>P / ESC</dt><dd>pause</dd>
+                            <dt>F</dt><dd>full screen</dd>
+                            <dt>TOUCH</dt><dd>drag to steer, auto-fire</dd>
+                            <dt>GAMEPAD</dt><dd>works too</dd>
+                        </dl>
+                        <ul class="pus">
+                            <li><i style="--c:#ff9a1f">P</i>power up (x4)</li>
+                            <li><i style="--c:#2bb5c9">H</i>homing torpedoes</li>
+                            <li><i style="--c:#ffd23f">B</i>Bub buddy</li>
+                            <li><i style="--c:#5ab4e8">S</i>bubble shield</li>
+                            <li><i style="--c:#6b6b80">D</i>depth charge</li>
+                            <li><i style="--c:#3f9446">1</i>extra sub</li>
+                        </ul>
+                    </div>
+                    <p class="tip">Destroy a whole squid formation or a takeaway box for a power-up. Pearls are points.</p>
+                    <div class="menu" data-back="back"><button type="button" data-act="back">GOT IT</button></div>
+                </div>
+
+                <div class="ov credits" id="credits" hidden>
+                    <div class="roll" id="roll">
+                        <h2>SUBSHOOTICA DX</h2>
+                        <p>a game by<br><b>HEIN DIJSTELBLOEM</b></p>
+                        <p>based on <b>Subshootica</b> (2024),<br>the GameBoy-style original</p>
+                        <h3>STARRING</h3>
+                        <p>THE AUGURK <i>as itself</i><br>BUB <i>as co-pilot</i><br>THE GRIDDLE<br>LADY IKA<br>THE LURE<br>THE SQUID KING<br>the entire Takoyaki Clan</p>
+                        <h3>MADE WITH</h3>
+                        <p>vanilla JavaScript<br>a tiny software 3D renderer<br>ordered dithering<br>a WebAudio chiptune tracker<br>too many takoyaki puns</p>
+                        <p class="small">no takoyaki were harmed in the making of this game.<br>several were eaten.</p>
+                        <h3>YOUR SCORE</h3>
+                        <p><b id="roll-score">0</b><br><i id="roll-diff"></i></p>
+                        <h2 class="end">THE END</h2>
+                        <p>thank you for playing!</p>
+                    </div>
+                </div>
+            </div>
+            <div class="touchbar" id="touchbar">
+                <button type="button" class="tbtn" id="tb-bomb">DEPTH<br>CHARGE</button>
+                <span class="tb-hint">drag anywhere to steer<br>auto-fire while touching</span>
+                <button type="button" class="tbtn small" data-act="full" aria-label="Full screen">FULL</button>
+                <button type="button" class="tbtn small" id="tb-pause" aria-label="Pause">II</button>
+            </div>
+        </div>
+        <div class="win-status"><span id="status">&larr;&uarr;&darr;&rarr; steer &middot; Z fire &middot; X depth charge &middot; P pause &middot; F full screen</span><span class="grow"></span></div>
+    </section>
+</main>
+<div id="dialogs"></div>
+
+<script>window.SEA = window.SEA || {};</script>
+<script src="js/dither.js"></script>
+<script src="js/mesh.js"></script>
+<script src="js/game-models.js"></script>
+<script src="js/game-audio.js"></script>
+<script src="js/game.js"></script>
+</body>
+</html>
