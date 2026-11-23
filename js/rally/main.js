@@ -659,6 +659,7 @@ function toMenu(sub) {
     cockpit.setVisible(false);
     setMenu(null);
     openCarousel(sub || 'main');
+    menuBg(false);
     syncOptions();
 }
 
@@ -1357,8 +1358,7 @@ const MAIN_CARDS = [
     { label: 'free roam', icon: 'world', desc: 'An open world: traffic, trains, rivals, hidden ducks, day and night', act: () => startRoam() },
     { label: 'cups', icon: 'cup', desc: 'Four races, points for every finish, a trophy at the end', act: () => openCarousel('cups') },
     { label: 'time trial', icon: 'trial', desc: 'Just you and the ghost of your best lap', act: () => { cup = null; flow = 'trial'; openCarousel('tracks'); } },
-    { label: 'test drive', icon: 'tracks', desc: 'Free laps with power-ups and three practice cars', act: () => { cup = null; startDrive('test'); } },
-    { label: 'tracks', icon: 'tracks', desc: 'Pick where to race', act: () => openCarousel('tracks') },
+    { label: 'test drive', icon: 'tracks', desc: 'Free laps with power-ups and three practice cars', act: () => { cup = null; flow = 'test'; openCarousel('tracks'); } },
     { label: 'garage', icon: 'garage', desc: 'Choose your car and paint it', act: () => openGarage() },
     { label: 'trophies', icon: 'cup', desc: 'Trophies to earn and your career stats', act: () => openTrophies() },
     { label: 'options', icon: 'options', desc: 'Look, camera, weather, sound', act: () => openPanel('opts') },
@@ -1372,11 +1372,17 @@ const cupCards = () => CUPS.map((c) => ({
     act: () => startCup(c.id)
 }));
 let carousel = { kind: 'main', items: MAIN_CARDS, sel: 0 };
-let flow = null;      // 'race' or 'trial' while picking a track and then a car
+let flow = null;      // 'race', 'trial' or 'test' while picking a track and then a car
+const FLOWN = { race: 'Race', trial: 'Time trial', test: 'Test drive' }, FLOWC = { race: 'race', trial: 'time trial', test: 'test drive' };
 function trackCards() {
     return TRACKS.map((t) => ({
-        label: t.name.toLowerCase(), desc: `${title(t.blurb)} · ${t.weather === 'dry' ? 'dry' : t.weather}`,
-        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); clearTimeout(previewT); if (!trackDef || trackDef.id !== t.id) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); } previewId = null; if (flow) openGarage(); else openCarousel('main', cardIdx('tracks')); }
+        label: t.name.toLowerCase(),
+        desc: (() => {
+            const best = store.get('heind.rally.best.' + t.id, null), gh = store.get('heind.rally.ghost.' + t.id, null);
+            return `${title(t.blurb)} · ${t.weather === 'dry' ? 'dry' : t.weather} · best lap ${fmt(best)}${gh ? ` · ghost ${fmt(gh.t)}` : ''}`;
+        })(),
+        badge: (() => { const best = store.get('heind.rally.best.' + t.id, null); return best == null ? 'no time' : fmt(best); })(),
+        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); clearTimeout(previewT); if (!trackDef || trackDef.id !== t.id) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); } previewId = null; if (flow) openGarage(); else openCarousel('main'); }
     }));
 }
 // a little glowing outline of a track, for its card
@@ -1409,9 +1415,19 @@ function previewTrack(id) {
         previewId = id; loadTrack(trackById(id)); showCar(specFor(CFG.car));
     }, 220);
 }
+// the main menu shows a different track every so often, behind a comic ink wipe
+let bgT = 0;
+function menuBg(wipe) {
+    bgT = 0;
+    const pool = TRACKS.filter((t) => !trackDef || t.id !== trackDef.id), t = pool[(Math.random() * pool.length) | 0];
+    const swap = () => { if (mode !== 'menu' || carousel.kind === 'tracks') return; loadTrack(t); showCar(specFor(CFG.car)); };
+    if (!wipe) { swap(); return; }
+    const w = $('#wipe'); w.classList.remove('go'); void w.offsetWidth; w.classList.add('go');
+    setTimeout(swap, 260);
+}
+const onSaved = () => { if (!trackDef || trackDef.id !== CFG.track || track.isWorld) loadTrack(trackById(CFG.track)); };
 function unpreview() {
     clearTimeout(previewT);
-    if (previewId && trackDef && trackDef.id !== CFG.track) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); }
     previewId = null;
 }
 function openCarousel(kind, sel) {
@@ -1422,11 +1438,11 @@ function openCarousel(kind, sel) {
     const items = kind === 'tracks' ? trackCards() : kind === 'cups' ? cupCards() : MAIN_CARDS;
     const start = sel != null ? sel : kind === 'tracks' ? Math.max(0, TRACKS.indexOf(trackById(CFG.track))) : 0;
     carousel = { kind, items, sel: start };
-    $('#carousel').innerHTML = items.map((it, i) => `<button type="button" class="bcard" data-card="${i}"><span class="ctag">${it.label}</span><img src="${it.img ? it.img() : cardIcon(it.icon)}" alt=""></button>`).join('');
+    $('#carousel').innerHTML = items.map((it, i) => `<button type="button" class="bcard" data-card="${i}"><span class="ctag">${it.label}</span><img src="${it.img ? it.img() : cardIcon(it.icon)}" alt="">${it.badge ? `<em class="cbadge${it.badge === 'no time' ? ' none' : ''}">${it.badge}</em>` : ''}</button>`).join('');
     $('#m-back').hidden = kind === 'main';
     if (kind !== 'tracks') flow = null;
     const st = $('#m-step'); st.hidden = !(flow && kind === 'tracks');
-    if (!st.hidden) st.innerHTML = `${flow === 'race' ? 'Race' : 'Time trial'} · step 1 of 2 · <b>pick a track</b>`;
+    if (!st.hidden) st.innerHTML = `${FLOWN[flow]} · step 1 of 2 · <b>pick a track</b>`;
     placeCards();
 }
 function placeCards() {
@@ -1441,9 +1457,8 @@ function placeCards() {
     if (carousel.kind === 'tracks') previewTrack(TRACKS[sel].id);
     $('#m-label').textContent = items[sel].label;
     $('#m-desc').textContent = items[sel].desc;
-    const t = trackById(CFG.track), b = store.get('heind.rally.best.' + t.id, null);
     const nu = nextUnlock();
-    $('#m-status').innerHTML = `&#9829; ${CFG.fansTotal} fans · ${nu ? `next car at ${nu.unlock}` : 'every car unlocked'} · ${t.name} · best ${fmt(b)}`;
+    $('#m-status').innerHTML = `&#9829; ${CFG.fansTotal} fans · ${nu ? `next car at ${nu.unlock}` : 'every car unlocked'}`;
     $('.bbar').style.setProperty('--fill', nu ? Math.min(1, CFG.fansTotal / nu.unlock) : 1);
 }
 $('#carousel').addEventListener('click', (e) => {
@@ -1457,7 +1472,7 @@ function carouselInput() {
     if (press('left')) { carousel.sel = (carousel.sel + n - 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('right')) { carousel.sel = (carousel.sel + 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('ok')) { audio.beep(990, 0.06); carousel.items[carousel.sel].act(); }
-    if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); const f = flow; flow = null; openCarousel('main', f ? cardIdx(f === 'race' ? 'race' : 'time trial') : cardIdx(carousel.kind)); }
+    if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); const f = flow; flow = null; openCarousel('main', f ? cardIdx(FLOWC[f]) : Math.max(0, cardIdx(carousel.kind))); }
 }
 
 /* ---------- garage: the cars in 3D, locked ones as silhouettes, and the paint shop ---------- */
@@ -1469,7 +1484,7 @@ function openGarage() {
     mode = 'garage';
     hideAll(); show('garage'); setMenu(null);
     const st = $('#g-step'); st.hidden = !flow;
-    if (flow) st.innerHTML = `${flow === 'race' ? 'Race' : 'Time trial'} · step 2 of 2 · <b>pick your car</b> · ${title(trackById(CFG.track).name)}`;
+    if (flow) st.innerHTML = `${FLOWN[flow]} · step 2 of 2 · <b>pick your car</b> · ${title(trackById(CFG.track).name)}`;
     gIdx = Math.max(0, CARS.indexOf(carById(CFG.car)));
     setCustom(false);
     garageShow();
@@ -1636,8 +1651,8 @@ function setPause(on) {
 }
 
 const ACTS = {
-    drive: () => startDrive('test'),
-    race: () => startDrive('race'),
+    drive: () => { onSaved(); startDrive('test'); },
+    race: () => { onSaved(); startDrive('race'); },
     garage: () => { if (mode === 'drive') return; openGarage(); },
     resume: () => setPause(false),
     photo: () => setPhoto(true),
@@ -1773,6 +1788,7 @@ function frame(now) {
         hits.delete('ok');
     }
     carouselInput();
+    if (mode === 'menu' && carousel.kind === 'main' && !$('#title').hidden && (bgT += dt) > 15) menuBg(true);
     garageInput();
     menuInput();
     if (!paused) {

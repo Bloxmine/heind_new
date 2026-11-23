@@ -513,10 +513,26 @@ body[data-intro="1"] #hud > :not(.rmsg) { visibility: hidden; }
 
 /* the step caption while picking a track and a car */
 .bstep {
-    position: absolute; left: 50%; top: calc(var(--gp) * 18); z-index: 2; margin: 0; transform: translateX(-50%) rotate(-1.5deg); white-space: nowrap;
+    position: absolute; left: 50%; top: calc(var(--gp) * 15.5); z-index: 2; margin: 0; transform: translateX(-50%) rotate(-1.5deg); white-space: nowrap;
     padding: calc(var(--gp) * 1.4) calc(var(--gp) * 6); font: 600 calc(var(--gp) * 6.5) / 1 var(--f-ui2); color: var(--paper);
     background: var(--ink); border: calc(var(--gp) * 0.8) solid var(--yel); box-shadow: calc(var(--gp) * 1.4) calc(var(--gp) * 1.4) 0 rgba(0, 0, 0, 0.6); text-shadow: none;
 }
 .bstep b { color: var(--yel); font-weight: 700; }
 .bstep[hidden] { display: none; }
 .g-step { left: auto; right: calc(var(--gp) * 8); top: calc(var(--gp) * 8); transform: rotate(1.5deg); }
+
+/* best lap on each track card */
+.cbadge {
+    position: absolute; left: 50%; bottom: calc(var(--gp) * -6); transform: translateX(-50%) rotate(-2deg); white-space: nowrap;
+    padding: calc(var(--gp) * 1) calc(var(--gp) * 3); font: 700 calc(var(--gp) * 6.5) / 1 var(--f-ui2); font-style: normal;
+    color: var(--paper); background: var(--ink); border: calc(var(--gp) * 0.7) solid var(--yel); box-shadow: calc(var(--gp) * 1) calc(var(--gp) * 1) 0 rgba(0, 0, 0, 0.6);
+}
+.cbadge.none { color: #8a8478; border-color: #5a5048; }
+/* the ink wipe between menu backdrops: a halftone panel that sweeps across */
+.wipe {
+    position: absolute; inset: 0; z-index: 15; pointer-events: none; opacity: 0;
+    background: radial-gradient(#0d0d12 45%, transparent 48%) 0 0 / calc(var(--gp) * 4) calc(var(--gp) * 4), rgba(13, 13, 18, 0.7);
+}
+.wipe.go { animation: wipe 0.55s steps(7) both; }
+@keyframes wipe { 0% { opacity: 0; clip-path: inset(0 100% 0 0); } 45% { opacity: 1; clip-path: inset(0 0 0 0); } 100% { opacity: 0; clip-path: inset(0 0 0 100%); } }
+.bmenu .bsel { top: calc(var(--gp) * 27); }
