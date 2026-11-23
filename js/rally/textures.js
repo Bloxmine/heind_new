@@ -307,8 +307,18 @@ export function treeTexture(kind = 'pine', seed = 1) {
 export function skyTexture(sky) {
     return make(512, 128, (x, w, h) => {
         const g = x.createLinearGradient(0, 0, 0, 100);
-        g.addColorStop(0, sky.top); g.addColorStop(1, sky.horizon);
+        g.addColorStop(0, sky.top); if (sky.mid) g.addColorStop(0.55, sky.mid); g.addColorStop(1, sky.horizon);
         x.fillStyle = g; x.fillRect(0, 0, w, h);
+        if (sky.wisps) {
+            const r = rng((sky.seed || 7) + 50);
+            for (let i = 0; i < 26; i++) {
+                const y = 16 + r() * 70, len = 40 + r() * 150, th = r() < 0.3 ? 2 : 1;
+                x.globalAlpha = 0.25 + r() * 0.4; x.fillStyle = sky.wisps;
+                x.fillRect((r() * w) | 0, y | 0, len | 0, th);
+                x.fillRect(((r() * w) | 0), (y + 2) | 0, (len * 0.6) | 0, 1);
+            }
+            x.globalAlpha = 1;
+        }
         if (sky.stars) { const r = rng(77); for (let i = 0; i < 260; i++) { x.fillStyle = r() < 0.2 ? '#c8d8ff' : '#ffffff'; x.fillRect((r() * w) | 0, (r() * 90) | 0, 1, 1); } }
         if (sky.aurora) {
             // curtains of green and violet light, in flat bands

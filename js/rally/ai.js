@@ -65,8 +65,14 @@ export class Driver {
             if (fwd > 0 && fwd < 7 + c.speed * 0.4 && lat < 2.4 && c.speed > o.speed) vmax = Math.min(vmax, o.speed + Math.max(0, fwd - 5.5) * 0.9);
         }
         const over = c.speed - vmax;
+        let ram = 0;
+        const p = ctx.player;
+        if (p && p !== c && this.style === 'aggressive' && p.wrecked <= 0 && c.speed > 12) {
+            const ox = p.x - c.x, oz = p.z - c.z, fw = ox * fx + oz * fz, right = -ox * fz + oz * fx;
+            if (fw > -3 && fw < 5 && Math.abs(right) > 1.2 && Math.abs(right) < 5) ram = Math.sign(right) * 0.45;
+        }
         return {
-            steer: clamp(-err * 2.6, -1, 1),
+            steer: clamp(-err * 2.6 + ram, -1, 1),
             throttle: over < -1 ? 1 : over < 1 ? 0.4 : 0,
             brake: over > 3 ? clamp(over / 8, 0.3, 1) : 0,
             handbrake: Math.abs(err) > 0.7 && c.speed > 18

@@ -1,6 +1,6 @@
 /* Gravel Riot: menus, garage, test drive with power-ups and practice cars. */
 import * as THREE from 'three';
-import { RES, Post, setWobble, glows, MAIN_ONLY, GLOW, ENV } from './retro.js';
+import { RES, Post, setWobble, glows, MAIN_ONLY, GLOW, ENV, cel } from './retro.js';
 import { surfaceTextures } from './textures.js';
 import { buildTrack } from './track.js';
 import { Car, CARS, SURF, makeCarMesh } from './car.js';
@@ -89,7 +89,7 @@ const SEA = window.SEA && window.SEA.SEA_PAL ? window.SEA.SEA_PAL.hexes : ['#000
 const NIGHT = ['#07090c', '#11151a', '#1c2229', '#2a3139', '#3b434c', '#4f5862', '#66707a', '#808a93', '#9ca5ad', '#bcc3c8', '#dde2e5', '#ffffff',
     '#0f2a28', '#1d4440', '#2f625a', '#4a8078', '#6fa39a', '#2e2a1e', '#4a4330', '#6a5f44', '#8c7d5a', '#ad9e78',
     '#5a2a1e', '#8a3a22', '#c2502a', '#e8783a', '#f2a85a', '#ffd27a', '#1a2a3e', '#2e4660', '#4a6a8a', '#7a9cbc',
-    '#3ad0ff', '#ff3a6e', '#b04aff', '#4aff7a', '#ffe23a'];
+    '#3ad0ff', '#ff3a6e', '#b04aff', '#4aff7a', '#ffe23a', '#8e8cc0', '#c4c0e4', '#a8c8e8'];
 const MOODY = { sat: 0.7, con: 1.12, vig: 0.42, shadow: [0.88, 1.0, 1.04], high: [1.12, 1.02, 0.9] };
 const LOOKS = {
     night: { name: 'NIGHT DRIVE', mode: 'palette', hexes: NIGHT, spread: 22, ink: '#07090c', line: '#dde8ee', grade: MOODY },
@@ -224,6 +224,7 @@ function loadTrack(base) {
     sunDisc.material.color.set(def.light.disc || '#ffd8a0');
     hemi.color.set(def.light.amb); hemi.groundColor.set(def.light.ground);
     drawMinimapBase();
+    applyLook();
 }
 function newCar(spec, slot, lights) {
     const c = new Car(spec, track);
@@ -418,7 +419,7 @@ let msgT = 0, burst = 0, fans = 0;
 const tint = { col: new THREE.Color(), t: 0, max: 1 };
 const message = (txt, t = 1.6, bad) => {
     const el = $('#h-msg'); el.textContent = txt; el.hidden = false;
-    el.classList.toggle('bad', !!bad); el.classList.toggle('big', /^([0-9]|GO!)$/.test(txt)); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); msgT = t;
+    el.classList.toggle('bad', !!bad); el.classList.toggle('big', /^([0-9]|GO!|TAKEDOWN!|WRECKED!)$/.test(txt)); el.classList.toggle('td', /^(TAKEDOWN!|WRECKED!)$/.test(txt)); el.classList.remove('pop'); void el.offsetWidth; el.classList.add('pop'); msgT = t;
 };
 function feed(text, pts, cls) {
     const box = $('#h-feed');
@@ -727,7 +728,7 @@ const roamApi = {
     env: { sun, hemi, scene, sunDisc, sunDir }
 };
 function toMenu(sub) {
-    replay = null; flow = null;
+    replay = null; flow = null; slowmo = null;
     codriver.stop(); notes = null; $('#h-notes').hidden = true;
     if (race && race.intro > 0) endIntro();
     $('#intro').hidden = true; document.body.dataset.intro = '';
@@ -919,6 +920,21 @@ function collide(a, b) {
     }
     if (rel > 3) sparks(best.cx, (a.y + b.y) / 2 + 0.6, best.cz, rel);
     if (rel > 12 && !grace) for (const c of [a, b]) if (c.invuln <= 0 && c.wrecked <= 0 && c.shield <= 0) { c.health -= (rel - 12) * 1.6 * 100 / (c.spec.hp || 100); if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, c === a ? b : a, 'wreck', 'crash'); } }
+    // who did the hitting: the car driving into the other one harder
+    const va = a.vx * nx + a.vz * nz, vb = -(b.vx * nx + b.vz * nz);
+    const att = va > vb ? a : b, vic = att === a ? b : a, sgn = att === a ? 1 : -1;
+    if (!grace && rel > 4 && vic.wrecked <= 0) {
+        // Burnout rules: the attacker shoves, the victim gets pushed and turned
+        if (att === car || (att.driver && att.driver.style === 'aggressive')) {
+            const k = Math.min(1.6, rel / 10);
+            vic.vx += nx * sgn * k * 3.2; vic.vz += nz * sgn * k * 3.2;
+            vic.w += (Math.random() < 0.5 ? -1 : 1) * k * 1.4;
+        }
+        // remember the shove: if the victim hits a wall soon, it's a takedown
+        const fwdV = Math.sin(vic.h) * nx * sgn + Math.cos(vic.h) * nz * sgn;      // +1: pushed from behind
+        vic.shovedBy = att; vic.shovedT = T; vic.shoveKind = att.ground === false && att.air > 0.3 ? 'Vertical' : fwdV > 0.6 ? 'Shunt' : fwdV < -0.6 ? 'Head-on' : 'Sideswipe';
+        if (rel > 17) takedown(vic, att, vic.shoveKind);
+    }
     if (a === car || b === car) {
         (a === car ? b : a).nmHit = T;
         if (rel > 6) endDrift(false);
@@ -938,9 +954,11 @@ function wallHit(c) {
     c.impact = 0;
     if (k < 3) return;
     sparks(c.impactX, c.y + 0.5, c.impactZ, k);
+    // shoved into a wall a moment ago: that's a takedown for whoever did the shoving
+    if (k > 7 && c.shovedBy && T - c.shovedT < 1.5 && c.wrecked <= 0) { takedown(c, c.shovedBy, 'Wall'); return; }
     if (k > 12 && c.invuln <= 0 && c.wrecked <= 0 && c.shield <= 0) {
         c.health -= (k - 12) * 1.5 * 100 / (c.spec.hp || 100);
-        if (c.health <= 0) { c.health = 0; c.wreck(); fx.event(c, null, 'wreck', 'crash'); }
+        if (c.health <= 0) { c.health = 0; c.wreck(); crumple(c); fx.event(c, null, 'wreck', 'crash'); if (c === car) crashCam(c, 'WRECKED!'); }
     }
     if (c === car && k > 6) endDrift(false);
     if (c === car) { audio.thud(Math.min(1, k / 12)); if (k > 7) audio.fx('hit'); shake = Math.max(shake, Math.min(1, k / 16)); if (k > 9) burst = Math.max(burst, 0.5); }
@@ -1032,6 +1050,7 @@ function updDrive(dt) {
             }
         }
         if (c.wrecking && c.wrecked <= 0) { c.respawn(); c.wrecking = false; c.lapN = c.lapN; }
+        if (c.wrecked <= 0 && c.mesh.body.scale.y !== 1) c.mesh.body.scale.set(1, 1, 1);
         const thr = race && race.count > 0 ? 0 : c === car && !c.driver ? readDrive().throttle : 1;
         c.stuckT = c.speed < 1 && thr && c.wrecked <= 0 ? c.stuckT + dt : 0;
         if (c.npc) { if (c.stuckT > 5 || c.y < c.q.y - 6 || (c.wrecking && c.wrecked <= 0)) roam.resetNpc(c); }
@@ -1407,6 +1426,72 @@ function updStorm(dt) {
     $('#flash').style.opacity = (fl * 0.4).toFixed(3);
 }
 
+/* ---------- takedowns: shove a rival into a wall (or hit them hard enough) and they're out ---------- */
+let slowmo = null;
+function takedown(v, by, how) {
+    if (!v || v.wrecked > 0 || v.invuln > 0 || v.out) return;
+    if (v.shield > 0) { v.shield = 0; audio.fx('block'); fx.sparkle(v, '#ffe23a'); return; }
+    v.shovedBy = null;
+    v.health = 0; v.wreck(); v.wrecking = true;
+    v.vy = Math.max(v.vy, 7); v.flipRate = (Math.random() < 0.5 ? -1 : 1) * (8 + Math.random() * 5);
+    crumple(v);
+    debris(v);
+    fx.boom(v.x, v.y + 0.6, v.z, '#ff9a3a', 0.8);
+    if (by === car) {
+        ST.takedown++;
+        earn(`${how} Takedown`, how === 'Vertical' ? 150 : 100);
+        car.nitro = Math.max(car.nitro, 1.2);
+        fx.tint('#ff3d3d', 0.5);
+        crashCam(v, 'TAKEDOWN!');
+    } else if (v === car) {
+        feed(`Taken down by ${nameOf(by)}`, 0, 'bad');
+        crashCam(v, 'WRECKED!');
+    }
+    if (battle) battle.pop(v, by);
+}
+// the crash cam: slow motion, the camera cuts away and circles the wreck
+function crashCam(v, label) {
+    if (slowmo && slowmo.t > 0.6) return;
+    slowmo = { car: v, t: 1.6, a: Math.atan2(cam.position.x - v.x, cam.position.z - v.z) };
+    message(label, 1.5, label === 'WRECKED!');
+    burst = Math.max(burst, 1);
+    audio.fx('wreck');
+}
+function crashView(dt) {
+    const v = slowmo.car;
+    slowmo.a += dt * 0.9;
+    const d = 7.5, px = v.x + Math.sin(slowmo.a) * d, pz = v.z + Math.cos(slowmo.a) * d;
+    cam.position.set(px, Math.max(v.y + 2.4, track.query(px, pz, v.q ? v.q.i : null).y + 1), pz);
+    cam.lookAt(v.x, v.y + 0.6, v.z);
+    cam.fov = 50; cam.clearViewOffset(); cam.updateProjectionMatrix();
+}
+// a wrecked car is squashed until it's back on the road
+function crumple(c) { c.mesh.body.scale.set(1.04, 0.82, 0.9); }
+// chunks of bodywork and glass flying off
+const shards = [];
+const shardGeo = new THREE.BoxGeometry(0.36, 0.2, 0.46), glassGeo = new THREE.BoxGeometry(0.2, 0.04, 0.24);
+function debris(v) {
+    const paintM = cel({ color: v.spec.body || '#c4c9d0' }), glassM = new THREE.MeshBasicMaterial({ color: '#cfe8ff' });
+    for (let k = 0; k < 14; k++) {
+        const m = new THREE.Mesh(k < 9 ? shardGeo : glassGeo, k < 9 ? paintM : glassM);
+        m.position.set(v.x + (Math.random() - 0.5) * 2, v.y + 0.8, v.z + (Math.random() - 0.5) * 2);
+        scene.add(m);
+        const a = Math.random() * Math.PI * 2, sp = 4 + Math.random() * 8;
+        shards.push({ m, vx: v.vx * 0.5 + Math.cos(a) * sp, vy: 4 + Math.random() * 7, vz: v.vz * 0.5 + Math.sin(a) * sp, s: [(Math.random() - 0.5) * 12, (Math.random() - 0.5) * 12], life: 3, floor: v.y });
+    }
+    for (let k = 0; k < 18; k++) puff(v.x, v.y + 0.8, v.z, k % 3 ? '#ffd27a' : '#ffffff', (Math.random() - 0.5) * 12, 2 + Math.random() * 6, (Math.random() - 0.5) * 12, 0.3, 0.05, 0.4);
+}
+function updDebris(dt) {
+    for (let i = shards.length - 1; i >= 0; i--) {
+        const s = shards[i], m = s.m;
+        s.life -= dt; s.vy -= 20 * dt;
+        m.position.x += s.vx * dt; m.position.y += s.vy * dt; m.position.z += s.vz * dt;
+        if (m.position.y < s.floor + 0.1) { m.position.y = s.floor + 0.1; s.vy *= -0.3; s.vx *= 0.7; s.vz *= 0.7; s.s[0] *= 0.6; s.s[1] *= 0.6; }
+        m.rotation.x += s.s[0] * dt; m.rotation.z += s.s[1] * dt;
+        if (s.life <= 0) { scene.remove(m); shards.splice(i, 1); }
+    }
+}
+
 function engineSound() {
     if (!car) return;
     const inp = mode === 'drive' && !paused ? readDrive() : { throttle: 0 };
@@ -1727,8 +1812,14 @@ function cycle(what, dir) {
     if (what === 'weather') { CFG.weather = WEATHERS[(WEATHERS.indexOf(CFG.weather) + (dir > 0 ? 1 : WEATHERS.length - 1)) % WEATHERS.length]; saveCfg(); reloadTrack(); }
     saveCfg(); syncOptions(); audio.beep(660, 0.05);
 }
+// the look, with a track's own colour grade on top (the bright late-90s skies want more colour)
+function applyLook() {
+    const L = LOOKS[CFG.look] || LOOKS.night;
+    const g = trackDef && trackDef.grade && L.grade ? Object.assign({}, L.grade, trackDef.grade) : L.grade;
+    post.setLook(Object.assign({}, L, { grade: g }));
+}
 function syncOptions() {
-    post.setLook(LOOKS[CFG.look] || LOOKS.night);
+    applyLook();
     post.set({ ink: CFG.ink, glow: CFG.glow });
     setWobble(CFG.wobble);
     const set = (k, v) => $$(`[data-cycle="${k}"] b`).forEach((b) => { b.textContent = v; });
@@ -1880,7 +1971,9 @@ const STEP = 1 / 120;
 let last = performance.now(), acc = 0, renderAcc = 0, T = 0;
 function frame(now) {
     requestAnimationFrame(frame);
-    const dt = Math.min(0.1, (now - last) / 1000);
+    let dt = Math.min(0.1, (now - last) / 1000);
+    const realDt = dt;
+    if (slowmo && mode === 'drive' && !paused) { slowmo.t -= dt; dt *= 0.28; if (slowmo.t <= 0) { slowmo = null; chase(0, true); } }
     last = now;
     if (document.hidden) return;
     pollPad();
@@ -1922,7 +2015,7 @@ function frame(now) {
             acc += dt;
             while (acc >= STEP) { updDrive(STEP); acc -= STEP; }
             cars.forEach((c) => { c.sync(dt); if (!(c.npc && c.npc.far)) carFx(c); });
-            if (CFG.view === "hood" && !(race && race.intro > 0)) { car.mesh.root.visible = false; if (shadow) shadow.visible = false; } else if (shadow) shadow.visible = true;
+            if (CFG.view === "hood" && !(race && race.intro > 0) && !slowmo) { car.mesh.root.visible = false; if (shadow) shadow.visible = false; } else if (shadow) shadow.visible = true;
             if (roam) roam.frame(dt, roamIn);
             if (battle && !(race && race.count > 0)) battle.frame(dt);
             updGhost();
@@ -1930,7 +2023,8 @@ function frame(now) {
             weapons.update(dt, cars, T);
             if (!race || race.count <= 0) { const ctx = { track, cars, weapons, rank: rankCars, player: car, pickups }; for (const c of cars) if (c.driver && c !== car) c.driver.tactics(dt, ctx); }
             if (results > 0 && (results -= dt) <= 0) showResults();
-            if (race && race.intro > 0) introCam(race.introT);
+            if (slowmo && CFG.view !== 'cockpit') crashView(realDt);
+            else if (race && race.intro > 0) introCam(race.introT);
             else if (CFG.view === 'cockpit') { cockpit.update(dt, track.def.rain); cockpit.place(cam); }
             else chase(dt);
             if (notes) updNotes();
@@ -1961,6 +2055,7 @@ function frame(now) {
         post.set({ rain: rainy * (inCockpit ? 0.6 : 0.8), slant: 0.15 + Math.min(0.6, rv / 80), wet: CFG.refl ? (roam ? (roam.atmos.snow ? 0 : rainK) : track.def.rain ? 1 : 0) : 0 });
         audio.setRain(rainy * (inCockpit ? 1 : 0.6));
         updPuffs(dt);
+        updDebris(dt);
         if (msgT > 0 && (msgT -= dt) <= 0) $('#h-msg').hidden = true;
         $('#h-wrong').hidden = !(wrongWay > 0.8 && mode === 'drive');
     }
@@ -1982,7 +2077,7 @@ function frame(now) {
     tint.t = Math.max(0, tint.t - dt);
     const tk = mode === 'drive' ? Math.min(0.32, tint.t / Math.min(tint.max, 0.7) * 0.32) : 0;
     post.set({ speed: lineK, burst: CFG.lines ? burst : 0, time: T, tint: [tint.col.r, tint.col.g, tint.col.b].map((v) => Math.pow(v, 1 / 2.2)), tintK: tk });
-    renderAcc += dt;
+    renderAcc += realDt;
     if (renderAcc >= 1 / CFG.fps - 0.002) {
         renderAcc = 0;
         const driving = mode === 'drive';
@@ -2039,7 +2134,7 @@ window.RALLY = {
     scene, cam, CFG, keys, hits, syncOptions, startDrive, toMenu, openGarage,
     set override(f) { override = f; }, get car() { return car; }, get cars() { return cars; }, get track() { return track; }, get mode() { return mode; },
     get rec() { return rec; }, get ghost() { return ghost; }, get lapStarted() { return lapStarted; },
-    get race() { return race; }, startBattle: (id) => startBattle(id), get battle() { return battle; }, get tape() { return tape; }, get replay() { return replay; }, startReplay, ST, checkAch, setMap, setPhoto, get drift() { return drift; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
+    get race() { return race; }, takedown: (v, by, how) => takedown(v, by, how), get slowmo() { return slowmo; }, collide: (a, b) => collide(a, b), wallHit: (c) => wallHit(c), startBattle: (id) => startBattle(id), get battle() { return battle; }, get tape() { return tape; }, get replay() { return replay; }, startReplay, ST, checkAch, setMap, setPhoto, get drift() { return drift; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
     set gIdx(v) { gIdx = v; garageShow(); }, rankCars: () => rankCars(), showResults: () => showResults(),
     startRoam: () => startRoam(), audio, music, get world() { return world; }, get roam() { return roam; },
     give: (type, c = car) => { c.slots.push({ type, ammo: PU[type].ammo || 1 }); }, get weapons() { return weapons; }

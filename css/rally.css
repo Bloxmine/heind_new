@@ -553,3 +553,6 @@ body[data-kind="trial"] .rmsg:not(.big) { top: calc(var(--gp) * 64); }
 .btoast { left: auto; right: calc(var(--gp) * 5); top: auto; bottom: calc(var(--gp) * 24); transform: none; font-size: calc(var(--gp) * 6.5); }
 @keyframes toastin { 0% { opacity: 0; transform: translateX(calc(var(--gp) * 12)); } 8%, 85% { opacity: 1; transform: none; } 100% { opacity: 0; transform: none; } }
 body[data-view="cockpit"] .b-drift { top: calc(var(--gp) * 80); }
+
+/* takedowns: a wider starburst for the longer words */
+.rmsg.big.td { width: calc(var(--gp) * 150); height: calc(var(--gp) * 66); font-size: calc(var(--gp) * 24); top: calc(var(--gp) * 38); }

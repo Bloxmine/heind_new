@@ -217,8 +217,18 @@ PROPS.towers = (ctx, o) => {
         mats.push(place(b.x, y0, b.z, yaw(s) + (r() - 0.5) * 0.2, w, hh, w * (0.7 + r() * 0.5)));
         if (h > 60) tops.push([b.x, y0 + hh, b.z]);
     }
-    const tex = TX.windows.clone(); tex.repeat.set(1.5, 3); tex.needsUpdate = true;
-    group.add(instanced(box, cel({ map: tex, emissive: '#ffffff', emissiveMap: tex }), mats));
+    if (o.day) {
+        // by day: pale walls and rows of glass
+        const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d'), r2 = rng(33);
+        x.fillStyle = '#d8dce2'; x.fillRect(0, 0, 32, 32);
+        for (let y = 2; y < 32; y += 5) for (let i = 1; i < 32; i += 4) { x.fillStyle = r2() < 0.2 ? '#9ab8d8' : '#6a86a8'; x.fillRect(i, y, 3, 3); }
+        const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; t.repeat.set(3, 8);
+        const tints = mats.map((_, k) => ['#e8e8ec', '#c8d0dc', '#dcd4c8', '#b8c4d4', '#f0ece4'][k % 5]);
+        group.add(instanced(box, cel({ map: t }), mats, tints));
+    } else {
+        const tex = TX.windows.clone(); tex.repeat.set(1.5, 3); tex.needsUpdate = true;
+        group.add(instanced(box, cel({ map: tex, emissive: '#ffffff', emissiveMap: tex }), mats));
+    }
     const blink = [];
     for (const [x, y, z] of tops) { const l = glows(new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.8, 0.8), new THREE.MeshBasicMaterial({ color: '#ff2a2a', fog: false }))); l.position.set(x, y + 0.5, z); group.add(l); blink.push(l); }
     anim.push((t) => blink.forEach((l, k) => { l.visible = Math.floor(t * 1.1 + k * 0.29) % 2 === 0; }));
