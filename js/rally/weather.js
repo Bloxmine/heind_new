@@ -21,8 +21,10 @@ export class Rain {
     setOn(on, mode = 'rain') {
         this.lines.visible = on;
         this.mode = mode;
-        this.lines.material.color.set(mode === 'snow' ? '#f4f8ff' : '#c8d4e0');
-        this.lines.material.opacity = mode === 'snow' ? 0.9 : 0.55;
+        const col = { snow: '#f4f8ff', embers: '#ff8a2a', leaves: '#e8782a' }[mode] || '#c8d4e0';
+        this.lines.material.color.set(col);
+        this.lines.material.opacity = mode === 'rain' ? 0.55 : 0.9;
+        this.flaky = mode !== 'rain';
     }
     update(dt, cam, car) {
         if (!this.lines.visible) return;
@@ -30,10 +32,10 @@ export class Rain {
         const vx = car ? car.vx : 0, vz = car ? car.vz : 0;
         for (let i = 0; i < this.n; i++) {
             let x = p[i * 3], y = p[i * 3 + 1], z = p[i * 3 + 2];
-            const snow = this.mode === 'snow', fall = snow ? 3.2 : 26;
+            const snow = this.flaky, fall = snow ? (this.mode === 'embers' ? -1.5 : 3.2) : 26;
             y -= fall * dt;
             if (snow) { x += Math.sin(y * 0.9 + i) * 0.8 * dt; z += Math.cos(y * 0.7 + i * 1.3) * 0.8 * dt; }
-            if (!this.init || y < c.y - 6 || Math.abs(x - c.x) > 22 || Math.abs(z - c.z) > 22) {
+            if (!this.init || y < c.y - 6 || y > c.y + 18 || Math.abs(x - c.x) > 22 || Math.abs(z - c.z) > 22) {
                 // respawn in a box around the camera, a little ahead of where we're going
                 x = c.x + (Math.random() - 0.5) * 40 + vx * 0.4;
                 z = c.z + (Math.random() - 0.5) * 40 + vz * 0.4;

@@ -327,7 +327,13 @@ export const SURF = {
     mud: { grip: 0.7, drag: 0.05, dust: '#4a3424' },
     jungle: { grip: 0.6, drag: 0.6, dust: '#2e6430' },
     cobble: { grip: 0.94, drag: 0.01, dust: null },
-    stone: { grip: 0.6, drag: 0.7, dust: '#6a6e5e' }
+    stone: { grip: 0.6, drag: 0.7, dust: '#6a6e5e' },
+    ash: { grip: 0.8, drag: 0.03, dust: '#5c5652' },
+    basalt: { grip: 0.62, drag: 0.6, dust: '#3a3230' },
+    leaves: { grip: 0.66, drag: 0.5, dust: '#c86a2a' },
+    water: { grip: 0.4, drag: 1.2, dust: '#9fd8f5' },
+    lava: { grip: 0.5, drag: 1.0, dust: '#ff9a3a' },
+    sand: { grip: 0.74, drag: 0.05, dust: '#d8945a' }
 };
 
 export class Car {

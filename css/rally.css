@@ -121,11 +121,11 @@
 .g-custom em { font-style: normal; color: var(--cyan); }
 .g-custom .sw { display: inline-grid; place-items: center; width: calc(var(--gp) * 14); height: calc(var(--gp) * 6); border-radius: calc(var(--gp) * 1.5); box-shadow: 0 0 0 calc(var(--gp) * 0.6) #fff; font: 600 calc(var(--gp) * 5) / 1 var(--f-ui2); color: #9ca5ad; }
 .garage.custom .g-stats, .garage.custom .g-hp, .garage.custom .g-hp-l { display: none; }
-.b-rev { position: absolute; left: 50%; bottom: calc(var(--gp) * 26); transform: translateX(-50%); display: flex; align-items: center; gap: calc(var(--gp) * 3); }
-.b-rev small { font: 700 calc(var(--gp) * 7) / 1 var(--f-ui2); color: var(--blue); }
-.b-rev i { display: block; width: calc(var(--gp) * 70); height: calc(var(--gp) * 6); padding: calc(var(--gp) * 0.8); background: #10151c; border-radius: calc(var(--gp) * 3); }
-.b-rev b { display: block; height: 100%; width: calc(var(--rev, 0) * 100%); border-radius: calc(var(--gp) * 2); background: linear-gradient(90deg, #4aff7a, #ffe23a 70%, #ff3a6e); }
-.b-rev.max b { animation: blink 0.12s steps(1) infinite; }
+.b-rev { position: absolute; left: 50%; bottom: calc(var(--gp) * 34); transform: translateX(-50%) rotate(-3deg); display: grid; justify-items: center; }
+.b-rev canvas { width: calc(var(--gp) * 88); height: calc(var(--gp) * 64); image-rendering: pixelated; filter: drop-shadow(0 0 calc(var(--gp) * 3) rgba(58, 140, 255, 0.45)); }
+.b-rev small { margin-top: calc(var(--gp) * -9); padding: calc(var(--gp) * 1) calc(var(--gp) * 4); font: 700 calc(var(--gp) * 7) / 1 var(--f-ui2); letter-spacing: 0.08em; color: #0a1018; background: var(--rc, #3ad0ff); transform: skewX(-12deg); box-shadow: calc(var(--gp) * 1.5) calc(var(--gp) * 1.5) 0 #000; }
+.b-rev.max canvas { animation: revshake 0.06s steps(2) infinite; }
+@keyframes revshake { 0% { transform: translate(0, 0); } 50% { transform: translate(calc(var(--gp) * 0.6), calc(var(--gp) * -0.4)); } }
 body[data-kind="trial"] .b-pos, body[data-kind="trial"] .b-fans { display: none; }
 
 /* ---------- race HUD ---------- */

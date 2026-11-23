@@ -163,6 +163,34 @@ export function surfaceTextures() {
             const r = rng(83), cols = ['#ffd27a', '#3ad0ff', '#ff3a6e', '#ffffff', '#b04aff'];
             for (let y = 2; y < 64; y += 4) for (let i = 2; i < 32; i += 4) if (r() < 0.22) { x.fillStyle = cols[(r() * cols.length) | 0]; x.fillRect(i, y, 2, 2); }
         }, { mip: false }),
+        water: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#1a4a6a', '#1e5276', '#16405e', '#22587e'], 8, 91);
+            const r = rng(13); x.fillStyle = '#9fd8f5';
+            for (let i = 0; i < 26; i++) { const X = (r() * 60) | 0, Y = (r() * 64) | 0; x.fillRect(X, Y, 3 + ((r() * 3) | 0), 1); }
+        }),
+        lava: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#c83a10', '#e85a18', '#a82a0a', '#f08020'], 8, 93);
+            const r = rng(17);
+            for (let i = 0; i < 18; i++) { x.fillStyle = r() < 0.5 ? '#ffd040' : '#3a1208'; x.fillRect((r() * 60) | 0, (r() * 60) | 0, 2 + ((r() * 5) | 0), 2 + ((r() * 3) | 0)); }
+        }),
+        basalt: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#2a2626', '#322c2a', '#24201e', '#3a3230'], 8, 95);
+            x.strokeStyle = 'rgba(232,90,24,0.55)'; x.lineWidth = 1;
+            const r = rng(21); for (let i = 0; i < 5; i++) { x.beginPath(); x.moveTo(r() * 64, 0); x.lineTo(r() * 64, 64); x.stroke(); }
+        }),
+        ash: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#4a4644', '#544e4a', '#423e3c', '#5c5652'], 4, 97);
+            dots(x, w, h, ['#2a2626', '#6e6662'], 60, 2, 6);
+        }),
+        leaves: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#6a4a2a', '#7a5430', '#5e4024', '#84603a'], 8, 99);
+            dots(x, w, h, ['#e8782a', '#c84a1a', '#e8b030', '#a83a1a'], 120, 2, 8);
+        }),
+        hangar: make(32, 32, (x) => {
+            x.fillStyle = '#8a929a'; x.fillRect(0, 0, 32, 32);
+            x.fillStyle = '#6e767e'; for (let i = 0; i < 32; i += 3) x.fillRect(i, 0, 1, 32);
+            x.fillStyle = '#3a4048'; x.fillRect(0, 30, 32, 2);
+        }, { mip: false }),
         post: make(8, 16, (x) => {
             for (let i = 0; i < 4; i++) { x.fillStyle = i % 2 ? '#e8e8e8' : '#d8302a'; x.fillRect(0, i * 4, 8, 4); }
         }, { mip: false }),
@@ -211,6 +239,14 @@ export function treeTexture(kind = 'pine', seed = 1) {
             for (let f = 0; f < 9; f++) {
                 const a = Math.PI + (f / 8) * Math.PI;
                 for (let k = 0; k < 13; k++) { x.fillStyle = cols[(f + k) % 3]; x.fillRect((16 + Math.cos(a) * k * 1.1) | 0, (60 + Math.sin(a) * k * 1.6 + k * k * 0.06) | 0, 2, 2); }
+            }
+        } else if (kind === 'autumn' || kind === 'birch') {
+            if (kind === 'birch') { x.fillStyle = '#e8e8e0'; x.fillRect(14, 30, 4, 34); x.fillStyle = '#2a2a2a'; for (let y = 34; y < 64; y += 6) x.fillRect(14 + (y % 4), y, 2, 1); }
+            const cols = kind === 'birch' ? ['#e8c030', '#d8a020', '#f0d050', '#c89018'] : ['#d84a1a', '#e8782a', '#b8321a', '#f09a30', '#8a2a14'];
+            for (let i = 0; i < 240; i++) {
+                const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 13;
+                x.fillStyle = cols[(r() * cols.length) | 0];
+                x.fillRect((16 + Math.cos(a) * d) | 0, (24 + Math.sin(a) * d * 1.3) | 0, 2, 2);
             }
         } else if (kind === 'cactus') {
             x.clearRect(0, 0, 32, 64);

@@ -293,6 +293,85 @@ PROPS.ruins = (ctx, o) => {
     group.add(instanced(new THREE.BoxGeometry(1, 1, 1), stone, blocks));
 };
 
+// --- coast ---
+// a striped lighthouse on the cliffs, its beam sweeping round
+PROPS.lighthouse = (ctx, o) => {
+    const { S, group, anim } = ctx;
+    const i = o.at || 50, s = S[i], b = beside(S, i, o.side || 0, s.w / 2 + (o.dist || 16));
+    const g = new THREE.Group();
+    for (let k = 0; k < 6; k++) {
+        const ring = new THREE.Mesh(new THREE.CylinderGeometry(2.6 - k * 0.22, 2.8 - k * 0.22, 3.4, 10), cel({ color: k % 2 ? '#e8e8e0' : '#c8282a' }));
+        ring.position.y = 1.7 + k * 3.4; g.add(ring);
+    }
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 1.6, 2.4, 10), cel({ color: '#2a3139' })); top.position.y = 22; g.add(top);
+    const lamp = glows(new THREE.Mesh(new THREE.SphereGeometry(1.1, 10, 6), new THREE.MeshBasicMaterial({ color: '#fff4c8', fog: false }))); lamp.position.y = 22; g.add(lamp);
+    const beam = new THREE.Mesh(new THREE.ConeGeometry(6, 60, 10, 1, true), new THREE.MeshBasicMaterial({ color: '#4a4430', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false }));
+    beam.layers.set(GLOW); beam.rotation.z = Math.PI / 2; beam.position.x = 30;
+    const pivot = new THREE.Group(); pivot.position.y = 22; pivot.add(beam); g.add(pivot);
+    const cap = new THREE.Mesh(new THREE.ConeGeometry(1.9, 1.6, 10), cel({ color: '#c8282a' })); cap.position.y = 24; g.add(cap);
+    g.position.set(b.x, s.y + Math.max(0, s.h[o.side || 0]) - 0.5, b.z);
+    group.add(g);
+    anim.push((t) => { pivot.rotation.y = t * 0.9; });
+};
+// --- airfield ---
+PROPS.hangars = (ctx, o) => {
+    const { S, group, TX } = ctx, r = rng(211);
+    for (let n = 0, tries = 0; n < (o.count || 4) && tries < 200; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i];
+        const b = beside(S, i, side, s.w / 2 + 30);
+        if (!clear(S, b.x, b.z, 24)) continue;
+        const g = new THREE.Group();
+        const shell = new THREE.Mesh(new THREE.CylinderGeometry(14, 14, 40, 12, 1, false, 0, Math.PI), cel({ map: TX.hangar, side: THREE.DoubleSide }));
+        shell.rotation.z = Math.PI / 2; shell.rotation.y = Math.PI / 2; shell.position.y = 0; g.add(shell);
+        const door = new THREE.Mesh(new THREE.PlaneGeometry(22, 10), cel({ color: '#1a1e24', side: THREE.DoubleSide })); door.position.set(0, 5, 20.1); g.add(door);
+        const sign = glows(new THREE.Mesh(new THREE.BoxGeometry(6, 1.2, 0.2), new THREE.MeshBasicMaterial({ color: '#ffd27a' }))); sign.position.set(0, 12, 20.2); g.add(sign);
+        g.position.set(b.x, s.y - 0.4, b.z); g.rotation.y = yaw(s) + (side ? Math.PI / 2 : -Math.PI / 2);
+        group.add(g); n++;
+    }
+};
+// little low-poly planes parked by the road
+PROPS.planes = (ctx, o) => {
+    const { S, group } = ctx, r = rng(223);
+    const cols = ['#e8e8e8', '#c8282a', '#2a5aa8', '#e8c020'];
+    for (let n = 0, tries = 0; n < (o.count || 5) && tries < 200; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i];
+        const b = beside(S, i, side, s.w / 2 + 12 + r() * 8);
+        if (!clear(S, b.x, b.z, 10)) continue;
+        const paint = cel({ color: cols[n % cols.length] }), dark = cel({ color: '#2a3139' });
+        const g = new THREE.Group();
+        const body = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.4, 9, 8), paint); body.rotation.x = Math.PI / 2; body.position.y = 1.6; g.add(body);
+        const nose = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.4, 8), dark); nose.rotation.x = Math.PI / 2; nose.position.set(0, 1.6, 5.1); g.add(nose);
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(11, 0.15, 1.8), paint); wing.position.set(0, 1.8, 0.8); g.add(wing);
+        const tail = new THREE.Mesh(new THREE.BoxGeometry(3.6, 0.12, 1), paint); tail.position.set(0, 1.9, -4); g.add(tail);
+        const fin = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.8, 1.2), paint); fin.position.set(0, 2.7, -4); g.add(fin);
+        const prop = new THREE.Mesh(new THREE.BoxGeometry(2.4, 0.15, 0.08), dark); prop.position.set(0, 1.6, 5.85); g.add(prop);
+        for (const sx of [-1.2, 1.2]) { const w = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.7), dark); w.position.set(sx, 0.4, 1.2); g.add(w); }
+        g.position.set(b.x, s.y, b.z); g.rotation.y = yaw(s) + r() * 1.5;
+        group.add(g); n++;
+    }
+};
+// runway lights: glowing dots along both edges
+PROPS.runwayLights = (ctx, o) => {
+    const { S, group } = ctx, mats = [], cols = [];
+    const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+    for (let i = 0; i < S.length; i += 3) for (let side = 0; side < 2; side++) {
+        const s = S[i], b = beside(S, i, side, s.w / 2 + 0.8);
+        mats.push(place(b.x, s.y + 0.2, b.z, 0)); cols.push(side ? '#3ad0ff' : '#ffd27a');
+    }
+    const im = instanced(geo, new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false }), mats, cols);
+    glows(im); group.add(im);
+};
+PROPS.tower = (ctx, o) => {
+    const { S, group } = ctx, i = o.at || 40, s = S[i], b = beside(S, i, o.side || 1, s.w / 2 + 24);
+    const g = new THREE.Group();
+    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(1.8, 2.2, 18, 8), cel({ color: '#c8c8c0' })); shaft.position.y = 9; g.add(shaft);
+    const cab = new THREE.Mesh(new THREE.CylinderGeometry(4, 3, 4, 8), cel({ color: '#3a4a58', emissive: '#203040' })); cab.position.y = 20; g.add(cab);
+    const roof = new THREE.Mesh(new THREE.CylinderGeometry(4.4, 4.4, 0.6, 8), cel({ color: '#2a3139' })); roof.position.y = 22.3; g.add(roof);
+    const beacon = glows(new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshBasicMaterial({ color: '#ff3a3a', fog: false }))); beacon.position.y = 23.2; g.add(beacon);
+    g.position.set(b.x, s.y - 0.3, b.z);
+    group.add(g);
+};
+
 export function buildProps(ctx) {
     for (const [name, opts] of Object.entries(ctx.def.props || {})) if (PROPS[name]) PROPS[name](ctx, opts === true ? {} : opts);
 }

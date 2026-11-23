@@ -29,7 +29,7 @@ if (!CFG.custom) CFG.custom = {};
 if (!CFG.trophies) CFG.trophies = {};
 const DIFFS = { easy: { name: 'EASY', skill: 0.84 }, normal: { name: 'NORMAL', skill: 0.91 }, hard: { name: 'HARD', skill: 0.98 } };
 if (!DIFFS[CFG.diff]) CFG.diff = 'normal';
-const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2', stadium: 'race2', jungle: 'race3', oldtown: 'race1', neon: 'race2' };
+const SONG_FOR = { alpine: 'race1', canyon: 'race2', frost: 'race3', harbour: 'race2', stadium: 'race2', jungle: 'race3', oldtown: 'race1', neon: 'race2', coast: 'race1', volcano: 'race3', autumn: 'race1', airfield: 'race2', world: 'race3' };
 const ordinal = (n) => n + (['th', 'st', 'nd', 'rd'][(n % 100 - 20) % 10] || ['th', 'st', 'nd', 'rd'][n % 100] || 'th');
 const WEATHERS = ['auto', 'dry', 'rain', 'snow'];
 if (!WEATHERS.includes(CFG.weather)) CFG.weather = 'auto';
@@ -138,12 +138,12 @@ function loadTrack(base) {
     trackDef = base;
     const w = CFG.weather === 'auto' ? base.weather || 'dry' : CFG.weather;
     const def = w === 'rain' ? rainy(base) : base;
-    def.snowfall = w === 'snow';
+    def.snowfall = w === 'snow' || w === 'embers' || w === 'leaves';
     clearRace();
     if (track) scene.remove(track.group);
     track = buildTrack(def, TX);
     if (def.rain) addPuddles(track);
-    rain.setOn(!!def.rain || def.snowfall, def.rain ? 'rain' : 'snow');
+    rain.setOn(!!def.rain || def.snowfall, def.rain ? 'rain' : w === 'snow' ? 'snow' : w);
     drops.clear();
     scene.add(track.group);
     scene.background = new THREE.Color(def.sky.top);
@@ -345,11 +345,49 @@ function feed(text, pts, cls) {
     setTimeout(() => p.remove(), 2200);
     if (pts) fans += pts;
 }
+// the launch dial: the needle is your revs, the outer ring is the countdown.
+// the white dot sweeps through the zones and freezes where you hit the throttle.
+const REV_ZONES = [[3.99, 3.0, '#ff3a6e', 'TOO EARLY'], [3.0, 2.4, '#4aff7a', 'PERFECT'], [2.4, 1.6, '#ffe23a', 'GOOD'], [1.6, 0.6, '#5a6472', 'LATE']];
+function drawRev() {
+    const cv = $('#h-revc'), x = cv.getContext('2d'), W = cv.width, H = cv.height, cx = W / 2, cy = 40;
+    const A0 = Math.PI * 0.8, A1 = Math.PI * 2.2, ang = (c) => A0 + (3.99 - clamp(c, 0.6, 3.99)) / 3.39 * (A1 - A0);
+    x.clearRect(0, 0, W, H);
+    x.lineCap = 'butt';
+    // dial face: dark disc with a chunky ink rim
+    x.fillStyle = '#000'; x.beginPath(); x.arc(cx, cy, 36, 0, Math.PI * 2); x.fill();
+    x.fillStyle = '#121a26'; x.beginPath(); x.arc(cx, cy, 33, 0, Math.PI * 2); x.fill();
+    // outer timing ring, in its zones
+    for (const [a, b, col] of REV_ZONES) { x.strokeStyle = col; x.lineWidth = 5; x.beginPath(); x.arc(cx, cy, 30, ang(a), ang(b)); x.stroke(); }
+    x.strokeStyle = '#000'; x.lineWidth = 1;
+    for (const [a] of REV_ZONES) { const t = ang(a); x.beginPath(); x.moveTo(cx + Math.cos(t) * 27, cy + Math.sin(t) * 27); x.lineTo(cx + Math.cos(t) * 33, cy + Math.sin(t) * 33); x.stroke(); }
+    // rev segments: lit blocks up to the needle
+    const segs = 14;
+    for (let i = 0; i < segs; i++) {
+        const t = A0 + (i + 0.15) / segs * (A1 - A0), t2 = A0 + (i + 0.85) / segs * (A1 - A0), on = i / segs < revHold;
+        x.strokeStyle = on ? (i >= segs - 3 ? '#ff3a6e' : i >= segs - 6 ? '#ffe23a' : '#3ad0ff') : '#26303e';
+        x.lineWidth = 4; x.beginPath(); x.arc(cx, cy, 22, t, t2); x.stroke();
+    }
+    // the timing dot: live, or frozen where you pressed
+    const at = race.rev != null ? race.rev : race.count, ta = ang(at);
+    x.fillStyle = '#000'; x.fillRect((cx + Math.cos(ta) * 30 - 3) | 0, (cy + Math.sin(ta) * 30 - 3) | 0, 6, 6);
+    x.fillStyle = '#fff'; x.fillRect((cx + Math.cos(ta) * 30 - 2) | 0, (cy + Math.sin(ta) * 30 - 2) | 0, 4, 4);
+    // needle with a bit of engine jitter
+    const jit = revHold > 0.05 ? (Math.random() - 0.5) * 0.06 * (0.4 + revHold) : 0;
+    const na = A0 + clamp(revHold + jit, 0, 1.02) * (A1 - A0);
+    x.strokeStyle = '#000'; x.lineWidth = 4; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(na) * 26, cy + Math.sin(na) * 26); x.stroke();
+    x.strokeStyle = '#ff8a2a'; x.lineWidth = 2; x.beginPath(); x.moveTo(cx, cy); x.lineTo(cx + Math.cos(na) * 25, cy + Math.sin(na) * 25); x.stroke();
+    x.fillStyle = '#000'; x.fillRect(cx - 4, cy - 4, 8, 8); x.fillStyle = '#e8eef6'; x.fillRect(cx - 2, cy - 2, 4, 4);
+    // the verdict tag underneath
+    const z = REV_ZONES.find(([a, b]) => at <= a && at > b) || REV_ZONES[3];
+    const lbl = race.rev != null ? z[3] : 'LAUNCH';
+    const rv = $('#h-rev'); rv.style.setProperty('--rc', race.rev != null ? z[2] : '#3ad0ff');
+    setText('h-revt', lbl);
+}
 function updateHUD() {
     if (mode !== 'drive' || !car) return;
     const rv = $('#h-rev'), onGrid = !!(race && race.count > 0);
     rv.hidden = !onGrid;
-    if (onGrid) { rv.style.setProperty('--rev', revHold.toFixed(2)); rv.classList.toggle('max', revHold >= 1); }
+    if (onGrid) { drawRev(); rv.classList.toggle('max', revHold >= 1); }
     const N = track.N, score = (c) => c.lapN * N + c.q.prog;
     const pos = 1 + cars.filter((c) => c !== car && score(c) > score(car)).length;
     setText('h-pos', String(pos)); setText('h-of', String(cars.length));
@@ -406,7 +444,8 @@ let race = null, raceT = 0, results = 0, cup = null, banked = false, revHold = 0
 const rankCars = () => { const N = track.N; return [...cars].sort((a, b) => (b.done ? 1e9 - b.finishT : b.lapN * N + b.q.prog) - (a.done ? 1e9 - a.finishT : a.lapN * N + a.q.prog)); };
 const CUPS = [
     { id: 'dirt', name: 'DIRT CUP', tracks: ['alpine', 'canyon', 'jungle', 'frost'] },
-    { id: 'city', name: 'CITY CUP', tracks: ['harbour', 'oldtown', 'neon', 'stadium'] }
+    { id: 'city', name: 'CITY CUP', tracks: ['harbour', 'oldtown', 'neon', 'stadium'] },
+    { id: 'wild', name: 'WILD CUP', tracks: ['coast', 'autumn', 'airfield', 'volcano'] }
 ];
 const CUP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 // a car with the player's paint job and parts
@@ -786,7 +825,7 @@ let carousel = { kind: 'main', items: MAIN_CARDS, sel: 0 };
 function trackCards() {
     return TRACKS.map((t) => ({
         label: t.name.toLowerCase(), desc: `${title(t.blurb)} · ${t.weather === 'dry' ? 'dry' : t.weather}`,
-        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); openCarousel('main', cardIdx('tracks')); }
+        img: () => thumb(t), act: () => { CFG.track = t.id; saveCfg(); clearTimeout(previewT); if (!trackDef || trackDef.id !== t.id) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); } previewId = null; openCarousel('main', cardIdx('tracks')); }
     }));
 }
 // a little glowing outline of a track, for its card
@@ -805,7 +844,23 @@ function thumb(t) {
     x.stroke();
     return (thumbs[t.id] = c.toDataURL());
 }
+// browsing the track list rebuilds the world behind the menu, after a short pause so
+// flicking past cards stays smooth; leaving without picking puts the saved track back
+let previewT = 0, previewId = null;
+function previewTrack(id) {
+    clearTimeout(previewT);
+    previewT = setTimeout(() => {
+        if (mode !== 'menu' || !trackDef || trackDef.id === id) return;
+        previewId = id; loadTrack(trackById(id)); showCar(specFor(CFG.car));
+    }, 220);
+}
+function unpreview() {
+    clearTimeout(previewT);
+    if (previewId && trackDef && trackDef.id !== CFG.track) { loadTrack(trackById(CFG.track)); showCar(specFor(CFG.car)); }
+    previewId = null;
+}
 function openCarousel(kind, sel) {
+    if (kind !== 'tracks') unpreview();
     hideAll(); show('title');
     music.want('menu');
     mode = 'menu'; menu = null;
@@ -825,6 +880,7 @@ function placeCards() {
         c.style.zIndex = 10 - ak;
         c.classList.toggle('on', k === 0);
     });
+    if (carousel.kind === 'tracks') previewTrack(TRACKS[sel].id);
     $('#m-label').textContent = items[sel].label;
     $('#m-desc').textContent = items[sel].desc;
     const t = trackById(CFG.track), b = store.get('heind.rally.best.' + t.id, null);

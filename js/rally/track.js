@@ -146,6 +146,8 @@ export function buildTrack(def, TX) {
     ground.material = cel({ map: TX[def.ground || def.terrain || 'grass'].clone() }, false);
     ground.material.map.repeat.set(500, 500); ground.material.map.needsUpdate = true;
     ground.rotation.x = -Math.PI / 2; ground.position.y = def.groundY;
+    if (def.groundGlow) { ground.material.emissive.set('#ffffff'); ground.material.emissiveMap = ground.material.map; ground.material.emissiveIntensity = 0.85; }
+    const groundMap = ground.material.map;
     group.add(ground);
 
     const skyTex = skyTexture(def.sky);
@@ -268,5 +270,6 @@ export function buildTrack(def, TX) {
         return { x: s.x + s.sx * o, z: s.z + s.sz * o, y: s.y, heading: Math.atan2(s.tx, s.tz), i };
     };
 
+    if (def.ground === 'water' || def.ground === 'lava') anim.push((t) => { groundMap.offset.set(t * 0.4, t * (def.ground === 'lava' ? 0.15 : 0.6)); });
     return { def, group, sky, S, N, L, seg, query, gridSlot, M, signs, animate: (t) => anim.forEach((f) => f(t)) };
 }

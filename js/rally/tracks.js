@@ -118,5 +118,62 @@ export const TRACKS = [
         terrain: 'concrete', cliff: 'concrete', ground: 'concrete',
         props: { barriers: true, towers: { tall: 80 }, neons: { every: 30 }, floodlights: { every: 20, color: '#b04aff' } },
         headlights: 1
+    },
+    {
+        id: 'coast', name: 'SEASIDE CLIFFS', blurb: 'a coast road above the sea, past the lighthouse',
+        surface: 'tarmac', width: 11, groundY: -22, laps: 3, weather: 'dry',
+        points: [[0, 0, 0], [100, -15, 3], [190, 10, 8], [240, 80, 12], [215, 165, 9], [140, 200, 5], [60, 185, 8], [10, 130, 4], [-60, 150, 2],
+            [-140, 120, 6], [-170, 40, 3], [-120, -20, 1], [-55, -25, 0]],
+        bank: { base: -2, amp: 9, seed: 41 },
+        sky: { top: '#3a7ac8', horizon: '#ffd8a8', far: '#6a8aa8', far2: '#5a7a98', near: '#3a6a8a', near2: '#34607e', clouds: '#f4f0e8', cloudsDark: '#c8c0b8', peaks: 18, seed: 15 },
+        fog: '#c8d8e0', fogNear: 120, fogFar: 560,
+        light: { sun: '#fff0d0', amb: '#9ab4d8', ground: '#4a6a3a', dir: [0.6, 0.5, -0.3], disc: '#fff4d0' },
+        trees: { kinds: ['palm', 'leaf'], density: 0.4 },
+        terrain: 'grass', cliff: 'rock', ground: 'water',
+        props: { lighthouse: { at: 120, side: 1, dist: 18 }, rocks: { density: 0.25 } },
+        headlights: 0
+    },
+    {
+        id: 'volcano', name: 'VOLCANO RIDGE', blurb: 'ash roads over rivers of lava',
+        surface: 'ash', width: 11, groundY: -7, laps: 3, weather: 'embers',
+        points: [[0, 0, 0], [95, 20, 4], [180, -10, 10], [235, 60, 16], [205, 140, 20], [125, 170, 14], [60, 130, 18], [-20, 160, 10],
+            [-110, 140, 6], [-160, 70, 8], [-140, -10, 4], [-70, -30, 1]],
+        jumps: [{ at: 0.36, h: 2.6, len: 24 }],
+        bank: { base: -3, amp: 5, seed: 43 },
+        sky: { top: '#1a0a0a', horizon: '#c8401a', far: '#2a1614', far2: '#3a1a14', near: '#1a0e0c', near2: '#2a1410', clouds: '#3a2220', cloudsDark: '#1e1210', peaks: 85, seed: 19 },
+        fog: '#6a2a18', fogNear: 70, fogFar: 420,
+        light: { sun: '#ffb07a', amb: '#b0705a', ground: '#c83a10', dir: [0.2, 0.4, 0.8], disc: '#ff6a2a' },
+        trees: { kinds: [], density: 0 },
+        terrain: 'basalt', cliff: 'basalt', ground: 'lava', groundGlow: true,
+        props: { rocks: { density: 0.4, tex: 'basalt' } },
+        headlights: 0.8
+    },
+    {
+        id: 'autumn', name: 'AUTUMN WOODS', blurb: 'red and gold trees and falling leaves',
+        surface: 'dirt', width: 10.5, groundY: -36, laps: 3, weather: 'leaves',
+        points: [[0, 0, 0], [90, 15, 3], [160, -10, 6], [225, 45, 9], [215, 125, 12], [150, 165, 9], [80, 135, 5], [30, 175, 3], [-45, 165, 6],
+            [-115, 120, 3], [-150, 45, 1], [-110, -15, 2], [-50, -25, 0]],
+        bank: { base: 4, amp: 7, seed: 47 },
+        sky: { top: '#5a8ac8', horizon: '#f0c890', far: '#7a6a5a', far2: '#6a5a4a', near: '#6a4a2a', near2: '#5e4024', clouds: '#f4ece0', cloudsDark: '#c8b8a8', peaks: 40, seed: 23 },
+        fog: '#d8c0a0', fogNear: 90, fogFar: 460,
+        light: { sun: '#ffe0b0', amb: '#a89a8a', ground: '#6a4a2a', dir: [-0.5, 0.45, 0.4], disc: '#fff0c8' },
+        trees: { kinds: ['autumn', 'birch', 'pine'], density: 0.9 },
+        terrain: 'leaves', cliff: 'rock', ground: 'leaves',
+        props: { rocks: { density: 0.2 } },
+        headlights: 0
+    },
+    {
+        id: 'airfield', name: 'AIRFIELD', blurb: 'runways, hangars and parked planes',
+        surface: 'tarmac', width: 16, groundY: -3, laps: 3, weather: 'dry', barrier: true,
+        points: [[0, 0, 0], [220, 0, 0], [260, 25, 0], [265, 80, 0], [230, 110, 0], [120, 110, 0], [80, 140, 0], [40, 190, 0], [-30, 195, 0],
+            [-70, 150, 0], [-60, 60, 0], [-40, 15, 0]],
+        bank: { base: 0.2, amp: 0.1, seed: 11 },
+        sky: { top: '#2a3a5a', horizon: '#e8a070', far: '#4a5a6a', far2: '#425262', near: '#3a4a3a', near2: '#344434', clouds: '#c8b0a8', cloudsDark: '#8a7a80', peaks: 14, seed: 27 },
+        fog: '#a89088', fogNear: 120, fogFar: 600,
+        light: { sun: '#ffc8a0', amb: '#7a8aa8', ground: '#4a4a3a', dir: [-0.6, 0.3, -0.4], disc: '#ffd8a8' },
+        trees: { kinds: [], density: 0 },
+        terrain: 'grass', cliff: 'concrete', ground: 'grass',
+        props: { barriers: true, hangars: { count: 4 }, planes: { count: 6 }, runwayLights: true, tower: { at: 60, side: 1 } },
+        headlights: 0.6
     }
 ];
