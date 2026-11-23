@@ -206,11 +206,23 @@ export class Post {
         this.clearBlack = new THREE.Color(0x000000);
     }
     // a small picture-in-picture (the rear-view mirror), mirrored left to right, at the top centre
+    // a sharper picture: everything renders at RES, which the options can raise
+    resize() {
+        const old = this.rt.depthTexture;
+        this.rt.depthTexture = new THREE.DepthTexture(RES.w, RES.h);
+        this.rt.depthTexture.type = THREE.UnsignedIntType;
+        this.rt.setSize(RES.w, RES.h);
+        old.dispose();
+        const u = this.mat.uniforms;
+        u.tDepth.value = this.rt.depthTexture; u.tDiffuse.value = this.rt.texture;
+        u.uRes.value.set(RES.w, RES.h);
+        for (const t of [this.glowRT, this.blurA, this.blurB]) t.setSize(RES.w / 2, RES.h / 2);
+    }
     setInset(tex, on) {
         if (!this.inset) {
             this.inset = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ depthTest: false, side: THREE.DoubleSide }));
             this.inset.renderOrder = 2;
-            const w = 69 / RES.w, top = 1 - 2 * 4.4 / RES.h, bot = 1 - 2 * 23.6 / RES.h;
+            const w = 69 / 320, top = 1 - 2 * 4.4 / 180, bot = 1 - 2 * 23.6 / 180;     // in base pixels, whatever the resolution
             this.inset.scale.set(-2 * w, top - bot, 1);
             this.inset.position.set(0, (top + bot) / 2, 0);
             this.scene.add(this.inset);
@@ -223,7 +235,8 @@ export class Post {
         if (this.inset) this.inset.visible = false;      // the mirror inset is not part of the glow
         this.quad.material = this.blur;
         this.blur.uniforms.tSrc.value = src.texture;
-        this.blur.uniforms.uDir.value.set(dx / src.width, dy / src.height);
+        const k = RES.w / 320;    // keep the glow the same size at higher resolutions
+        this.blur.uniforms.uDir.value.set(dx * k / src.width, dy * k / src.height);
         this.r.setRenderTarget(dst);
         this.r.render(this.scene, this.cam);
         this.quad.material = this.mat;

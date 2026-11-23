@@ -10,7 +10,7 @@ import { Cockpit } from './cockpit.js';
 import { Rain, Droplets, addPuddles, rainy } from './weather.js';
 import { PU, Pickups, Weapons, iconURL } from './powerups.js';
 import { Driver, RIVALS, plan } from './ai.js';
-import { Music } from './music.js';
+import { Music, SONGS } from './music.js';
 import { buildWorld, Roam } from './world.js';
 
 const $ = (q, r = document) => r.querySelector(q);
@@ -52,6 +52,10 @@ const LOOKS = {
     raw: { name: 'NO DITHER', mode: 'raw', ink: '#07090c', line: '#dde8ee', grade: MOODY }
 };
 const FPS = [60, 30, 15];
+// render resolution: the retro 320 x 180 by default, up to 1280 x 720
+const RESK = [1, 2, 3, 4], RESN = ['RETRO 320', 'SHARP 640', 'HIGH 960', 'HD 1280'];
+if (!RESK.includes(CFG.res)) CFG.res = 1;
+const BASE = { w: 320, h: 180 };
 
 /* ---------- renderer ---------- */
 const canvas = $('#game');
@@ -509,7 +513,7 @@ function startDrive(kind = race ? race.kind : 'race') {
             cars.push(b);
         }
     }
-    music.want(SONG_FOR[track.def.id] || 'race1');
+    music.want(SONGS[track.def.id] ? track.def.id : SONG_FOR[track.def.id] || 'race1');
     pickups = kind === 'trial' || kind === 'roam' ? null : new Pickups(track, scene);
     weapons = new Weapons(scene, track, fx);
     weapons.rank = rankCars;
@@ -1076,6 +1080,7 @@ const hideAll = () => ['title', 'hud', 'pause', 'garage', 'opts', 'ctrls', 'resu
 function cycle(what, dir) {
     if (what.startsWith('c-')) { customCycle(what.slice(2), dir); audio.beep(660, 0.05); return; }
     if (what === 'look') { const k = Object.keys(LOOKS); CFG.look = k[(k.indexOf(CFG.look) + dir + k.length) % k.length]; }
+    if (what === 'res') { CFG.res = RESK[(RESK.indexOf(CFG.res) + (dir > 0 ? 1 : RESK.length - 1)) % RESK.length]; setRes(); }
     if (what === 'fps') CFG.fps = FPS[(FPS.indexOf(CFG.fps) + (dir > 0 ? 1 : FPS.length - 1)) % FPS.length];
     if (what === 'wobble') CFG.wobble = (CFG.wobble + (dir > 0 ? 1 : 2)) % 3;
     if (what === 'sound') { CFG.sound = !CFG.sound; audio.setOn(CFG.sound); }
@@ -1099,6 +1104,7 @@ function syncOptions() {
     set('view', CFG.view === 'chase' ? 'CHASE' : 'COCKPIT');
     set('weather', CFG.weather === 'auto' ? 'TRACK' : CFG.weather.toUpperCase());
     set('fps', CFG.fps + ' FPS');
+    set('res', RESN[RESK.indexOf(CFG.res)]);
     set('wobble', ['OFF', 'ON', 'EXTRA'][CFG.wobble]);
     set('sound', CFG.sound ? 'ON' : 'OFF');
     set('music', CFG.music ? 'ON' : 'OFF');
@@ -1112,6 +1118,14 @@ function syncOptions() {
     document.documentElement.dataset.pal = CFG.look === 'dmg' ? 'dmg' : CFG.look === 'sea' ? 'sea' : 'night';
 }
 
+function setRes() {
+    RES.w = BASE.w * CFG.res; RES.h = BASE.h * CFG.res;
+    renderer.setSize(RES.w, RES.h, false);
+    post.resize();
+    puffMat.uniforms.uScale.value = RES.h * 0.85;
+    setWobble(CFG.wobble);
+    document.body.dataset.res = CFG.res;
+}
 function setPause(on) {
     if (mode !== 'drive') return;
     paused = on;
@@ -1146,7 +1160,7 @@ document.addEventListener('click', (e) => {
     const opt = e.target.closest('[data-opt]');
     if (opt) {
         const [k, v] = opt.dataset.opt.split(':');
-        if (v) { CFG[k] = isNaN(+v) ? v : +v; saveCfg(); syncOptions(); if (k === 'track' || k === 'weather') reloadTrack(); } else cycle(k, 1);
+        if (v) { CFG[k] = isNaN(+v) ? v : +v; saveCfg(); if (k === 'res') setRes(); syncOptions(); if (k === 'track' || k === 'weather') reloadTrack(); } else cycle(k, 1);
         closeMenus(); return;
     }
     const a = e.target.closest('[data-act]');
@@ -1202,12 +1216,12 @@ function fit() {
     const full = isFull();
     const chromeH = full ? 0 : zoomed ? 70 : 22 + 24 + 22 + 48;
     const aw = full ? innerWidth : vw - (vw < 600 ? 22 : 60), ah = vh - chromeH - (coarse ? 110 : 0);
-    let s = Math.min(aw / RES.w, ah / RES.h);
+    let s = Math.min(aw / BASE.w, ah / BASE.h);
     if (s >= 2 && !coarse && (!full || Math.floor(s) / s > 0.85)) s = Math.floor(s);
     scale = Math.max(1, s);
     const sc = $('#screen');
-    sc.style.width = Math.round(RES.w * scale) + 'px';
-    sc.style.height = Math.round(RES.h * scale) + 'px';
+    sc.style.width = Math.round(BASE.w * scale) + 'px';
+    sc.style.height = Math.round(BASE.h * scale) + 'px';
     sc.style.setProperty('--px', (scale * 0.75) + 'px');
     sc.style.setProperty('--gp', scale + 'px');
     const blk = Math.max(2, Math.round(scale * 0.6));
@@ -1302,7 +1316,7 @@ function frame(now) {
     if (renderAcc >= 1 / CFG.fps - 0.002) {
         renderAcc = 0;
         const driving = mode === 'drive';
-        if (driving) cockpit.renderMirror(renderer, scene);
+        if (driving) { if (cockpit.rt.width !== 96 * CFG.res) cockpit.rt.setSize(96 * CFG.res, 28 * CFG.res); cockpit.renderMirror(renderer, scene); }
         post.setInset(cockpit.rt.texture, driving && CFG.view !== 'cockpit');
         post.render(scene, cam);
         if (driving) drawMinimap();
@@ -1320,6 +1334,7 @@ function frame(now) {
 }
 
 /* ---------- boot ---------- */
+setRes();
 fit();
 loadTrack(trackById(CFG.track));
 showCar(specFor(CFG.car));
@@ -1354,6 +1369,6 @@ window.RALLY = {
     get rec() { return rec; }, get ghost() { return ghost; }, get lapStarted() { return lapStarted; },
     get race() { return race; }, startCup: (id) => startCup(id), get cup() { return cup; }, openCarousel: (k) => openCarousel(k), customCycle: (k, d) => customCycle(k, d), setCustom: (on) => setCustom(on),
     set gIdx(v) { gIdx = v; garageShow(); }, rankCars: () => rankCars(), showResults: () => showResults(),
-    startRoam: () => startRoam(), get world() { return world; }, get roam() { return roam; },
+    startRoam: () => startRoam(), audio, music, get world() { return world; }, get roam() { return roam; },
     give: (type, c = car) => { c.slots.push({ type, ammo: PU[type].ammo || 1 }); }, get weapons() { return weapons; }
 };
