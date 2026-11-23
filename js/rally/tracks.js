@@ -107,7 +107,7 @@ export const TRACKS = [
         headlights: 0.7
     },
     {
-        id: 'neon', name: 'NEON DISTRICT', blurb: 'downtown by day: an overpass, towers and a lot of signs',
+        id: 'neon', name: 'NEW YORK', blurb: 'midtown avenues by day, then a run through Central Park',
         grade: { sat: 1.02, con: 1.0, vig: 0.12, shadow: [0.98, 0.98, 1.04], high: [1.03, 1.02, 1.04] },
         surface: 'tarmac', width: 14, groundY: -3, laps: 3, weather: 'dry', barrier: true,
         points: [[0, 0, 0], [150, 0, 0], [185, 20, 2], [195, 60, 5], [190, 140, 8], [170, 180, 6], [120, 195, 3], [20, 190, 0], [-30, 175, 0],
@@ -118,7 +118,10 @@ export const TRACKS = [
         light: { sun: '#fffaf0', amb: '#b0c4e4', ground: '#5a5a64', dir: [-0.4, 0.8, 0.3], disc: '#fffcf0' },
         trees: { kinds: [], density: 0 },
         terrain: 'concrete', cliff: 'concrete', ground: 'concrete',
-        props: { barriers: true, towers: { tall: 80, day: true }, neons: { every: 30 }, floodlights: { every: 20, color: '#b04aff' } },
+        props: {
+            barriers: true, towers: { tall: 110, day: true, skip: [[0.5, 0.82]] }, neons: { every: 40, skip: [[0.5, 0.82]], words: ['DELI', 'PIZZA', 'BAGELS', 'HOTEL', 'THEATER', 'DINER', 'SUBWAY', 'TAXI'] },
+            cityPark: { from: 0.52, to: 0.8 }, taxis: { skip: [[0.5, 0.82]] }
+        },
         headlights: 0
     },
     {
@@ -357,5 +360,61 @@ export const TRACKS = [
         terrain: 'carpet', cliff: 'wood', ground: 'carpet',
         props: { barriers: { tex: 'toyrail' }, blocks: { count: 18 }, pencils: { count: 6 }, books: { count: 5 }, lamp: { at: 0.32, side: 1 }, bigDuck: { at: 0.66, side: 0 } },
         headlights: 0
+    },
+    {
+        id: 'holland', name: 'DUTCH POLDERS', blurb: 'dykes, canals, turning windmills and endless tulip fields',
+        grade: { sat: 1.02, con: 1.0, vig: 0.12, shadow: [0.98, 0.98, 1.04], high: [1.03, 1.02, 1.04] },
+        surface: 'tarmac', width: 10, groundY: -1.6, laps: 3, weather: 'dry',
+        points: [[0, 0, 1], [120, 0, 1], [160, 20, 1], [170, 80, 1], [150, 130, 1], [90, 140, 1], [40, 170, 1], [-40, 175, 1], [-100, 150, 1], [-130, 90, 1], [-120, 30, 1], [-60, 0, 1]],
+        bank: { base: 0.5, amp: 0.25, seed: 141 },
+        sky: { top: '#5a7ec0', mid: '#9ab8dc', horizon: '#e0e8f0', far: '#8aa0b4', far2: '#7c92a8', near: '#6a8a5a', near2: '#628252', clouds: '#ffffff', cloudsDark: '#c8d0dc', wisps: '#f4f8ff', peaks: 3, seed: 143 },
+        fog: '#d8e2ea', fogNear: 140, fogFar: 620,
+        light: { sun: '#fff6e8', amb: '#b0c0d8', ground: '#4a6a3a', dir: [0.5, 0.6, -0.3], disc: '#fffaf0' },
+        trees: { kinds: ['leaf'], density: 0.12 },
+        terrain: 'grass', cliff: 'grass', ground: 'water',
+        props: { windmills: { count: 7 }, tulips: true, houses: { tall: 5, gaps: 0.75, inset: 16 } },
+        headlights: 0
+    },
+    {
+        id: 'autobahn', name: 'AUTOBAHN', blurb: 'three lanes and no speed limit: slipstream your way past',
+        grade: { sat: 1.02, con: 1.0, vig: 0.12, shadow: [0.98, 0.98, 1.04], high: [1.03, 1.02, 1.04] },
+        surface: 'autobahn', width: 18, groundY: -4, laps: 2, weather: 'dry', barrier: true,
+        points: [[0, 0, 0], [260, 10, 2], [420, -40, 4], [480, -160, 6], [420, -300, 4], [260, -360, 2], [60, -340, 0], [-120, -300, 2], [-240, -200, 4], [-260, -60, 2], [-160, 10, 0]],
+        bank: { base: 2, amp: 4, seed: 149 },
+        sky: { top: '#4a7cc8', mid: '#90b4e0', horizon: '#e4ecf4', far: '#5a7a6a', far2: '#4e6e5e', near: '#3e5e44', near2: '#38583e', wisps: '#ffffff', peaks: 14, seed: 151 },
+        fog: '#dce6ee', fogNear: 160, fogFar: 700,
+        light: { sun: '#fff6e8', amb: '#b0c4e0', ground: '#4a5a3a', dir: [0.4, 0.7, -0.4], disc: '#fffaf0' },
+        trees: { kinds: ['pine', 'pine', 'leaf'], density: 0.95 },
+        terrain: 'grass', cliff: 'concrete', ground: 'grass',
+        props: { barriers: true, gantries: { every: 110 }, noLimit: { every: 70 } },
+        headlights: 0
+    },
+    {
+        id: 'redwood', name: 'REDWOOD GIANTS', blurb: 'a misty forest of giant trees, and a road straight through one of them',
+        surface: 'tarmac', width: 10, groundY: -20, laps: 3, weather: 'dry',
+        tunnels: [[0.49, 0.525]], tunnelTex: 'bark', tunnelTint: '#e8b890', tunnelH: 0.9, tunnelLight: '#ffc870',
+        points: [[0, 0, 0], [90, -10, 3], [150, -60, 6], [150, -140, 9], [90, -190, 12], [10, -180, 10], [-60, -210, 8], [-130, -170, 5], [-160, -90, 3], [-120, -20, 1], [-60, 0, 0]],
+        bank: { base: 3, amp: 3, seed: 153 },
+        sky: { top: '#4a6a5a', mid: '#8aa088', horizon: '#d8d0a8', far: '#3a4a3a', far2: '#344434', near: '#2a3a2a', near2: '#263426', peaks: 30, seed: 155 },
+        fog: '#a8b098', fogNear: 30, fogFar: 260,
+        light: { sun: '#ffe8b0', amb: '#8a9a78', ground: '#3a2a1a', dir: [0.3, 0.8, 0.2], disc: '#fff0c8' },
+        trees: { kinds: ['fern', 'fern', 'pine'], density: 1 },
+        terrain: 'leaves', cliff: 'rock', ground: 'leaves',
+        props: { redwoods: { density: 0.7 }, bigTree: true, godrays: { count: 16 } },
+        headlights: 0.4
+    },
+    {
+        id: 'vegas', name: 'LAS VEGAS STRIP', blurb: 'the 1950s strip at sundown: low casinos, motels and atomic-age neon',
+        grade: { sat: 1.08, con: 1.02, vig: 0.18, shadow: [0.96, 0.96, 1.06], high: [1.06, 1.0, 0.96] },
+        surface: 'tarmac', width: 14, groundY: -2, laps: 3, weather: 'dry', barrier: false, noWeather: false,
+        points: [[0, 0, 0], [200, 0, 0], [240, 30, 0], [240, 110, 0], [200, 140, 0], [40, 140, 0], [0, 170, 0], [-60, 170, 0], [-100, 130, 0], [-100, 40, 0], [-60, 0, 0]],
+        bank: { base: 0.3, amp: 0.2, seed: 157 },
+        sky: { top: '#24245e', mid: '#b05a8a', horizon: '#ffae68', far: '#7a4a5a', far2: '#6a3e50', near: '#c88a5a', near2: '#b87c50', wisps: '#ffc8a0', peaks: 26, seed: 161 },
+        fog: '#b88aa8', fogNear: 120, fogFar: 560,
+        light: { sun: '#ffb880', amb: '#a888b8', ground: '#8a6a4a', dir: [-0.7, 0.3, -0.4], disc: '#ffd0a0' },
+        trees: { kinds: ['palm'], density: 0.35 },
+        terrain: 'concrete', cliff: 'sand', ground: 'sand',
+        props: { casinos: true, pylons: { every: 26 }, welcome: { at: 8, side: 0 }, oldCars: true },
+        headlights: 0.6
     }
 ];

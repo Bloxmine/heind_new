@@ -2,7 +2,8 @@
    concrete barriers, rocks and a neon roadside sign. Each track lists which of these it wants. */
 import * as THREE from 'three';
 import { cel, glows, GLOW } from './retro.js';
-import { rng } from './textures.js';
+import { rng, treeTexture } from './textures.js';
+import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 
 const Y = new THREE.Vector3(0, 1, 0);
 const q = new THREE.Quaternion(), m4 = new THREE.Matrix4(), v3 = new THREE.Vector3(), s3 = new THREE.Vector3();
@@ -208,8 +209,9 @@ PROPS.towers = (ctx, o) => {
     const { S, group, TX, anim } = ctx, r = rng(131);
     const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
     const mats = [], tops = [];
+    const skip = (i) => (o.skip || []).some(([a, b]) => i / S.length >= a && i / S.length <= b);
     for (let i = 0; i < S.length; i += 6) for (let side = 0; side < 2; side++) {
-        if (r() < 0.25) continue;
+        if (r() < 0.25 || skip(i)) continue;
         const s = S[i], w = 14 + r() * 12, h = 30 + r() * (o.tall || 70);
         const b = beside(S, i, side, s.w / 2 + 10 + w / 2 + r() * 12);
         if (!clear(S, b.x, b.z, s.w / 2 + 8 + w / 2)) continue;
@@ -239,6 +241,7 @@ PROPS.neons = (ctx, o) => {
     const pairs = [['#3ad0ff', '#ff3a6e'], ['#ff3a6e', '#ffe23a'], ['#b04aff', '#3ad0ff'], ['#4aff7a', '#ff9a3a']];
     const r = rng(151);
     for (let i = 20, k = 0; i < ctx.S.length - 10; i += o.every || 34, k++) {
+        if ((o.skip || []).some(([a, b]) => i / ctx.S.length >= a && i / ctx.S.length <= b)) continue;
         const [a, b] = pairs[k % pairs.length];
         PROPS.neon(ctx, { at: i, side: k % 2, text: words[k % words.length], a, b, dist: 7 + r() * 4 });
     }
@@ -808,6 +811,294 @@ PROPS.bigDuck = (ctx, o) => {
     g.position.set(b.x, s.y - 0.5, b.z); g.rotation.y = yaw(s) + (o.side ? -0.6 : 0.6);
     group.add(g);
     anim.push((t) => { g.rotation.z = Math.sin(t * 0.8) * 0.04; });
+};
+
+// --- the Netherlands ---
+// windmills on the polder, sails turning
+PROPS.windmills = (ctx, o) => {
+    const { S, group, anim } = ctx, r = rng(601), sails = [];
+    for (let n = 0, tries = 0; n < (o.count || 6) && tries < 300; tries++) {
+        const i = (r() * S.length) | 0, side = r() < 0.5 ? 0 : 1, s = S[i];
+        const b = beside(S, i, side, s.w / 2 + 14 + r() * 10);
+        if (!clear(S, b.x, b.z, s.w / 2 + 9)) continue;
+        const g = new THREE.Group(), y0 = s.y + s.h[side] * 0.6 - 0.4;
+        const tower = new THREE.Mesh(new THREE.CylinderGeometry(2.2, 3.6, 12, 8), cel({ color: '#4a5a4a' })); tower.position.y = 6; g.add(tower);
+        const cap = new THREE.Mesh(new THREE.ConeGeometry(2.8, 3.4, 8), cel({ color: '#3a3a3a' })); cap.position.y = 13.6; g.add(cap);
+        const gallery = new THREE.Mesh(new THREE.CylinderGeometry(4.2, 4.2, 0.3, 10), cel({ color: '#6a4a2a' })); gallery.position.y = 4.5; g.add(gallery);
+        const door = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2), cel({ color: '#2a5a2a' })); door.position.set(0, 1, 3.55); g.add(door);
+        const hubG = new THREE.Group(); hubG.position.set(0, 12.6, 2.6);
+        for (let k = 0; k < 4; k++) {
+            const arm = new THREE.Group(); arm.rotation.z = k * Math.PI / 2;
+            const spar = new THREE.Mesh(new THREE.BoxGeometry(0.3, 9, 0.2), cel({ color: '#4a3020' })); spar.position.y = 4.5; arm.add(spar);
+            const sail = new THREE.Mesh(new THREE.BoxGeometry(1.8, 6.5, 0.08), cel({ color: '#f0e8d8' })); sail.position.set(1.05, 5.4, 0); arm.add(sail);
+            hubG.add(arm);
+        }
+        g.add(hubG); sails.push(hubG);
+        g.position.set(b.x, y0, b.z); g.rotation.y = yaw(s) + (side ? -1 : 1) * 1.1;
+        group.add(g); n++;
+    }
+    anim.push((t) => sails.forEach((h, k) => { h.rotation.z = t * (0.5 + k * 0.05); }));
+};
+// tulip fields: stripes of colour beside the road
+PROPS.tulips = (ctx, o) => {
+    const { S, group } = ctx, r = rng(607), mats = [], cols = [], C = ['#e8282a', '#ffd23f', '#ff7ab0', '#f4f0e8', '#ff8a2a', '#b04aff'];
+    for (let i = 0; i < S.length; i += 2) for (let side = 0; side < 2; side++) {
+        const s = S[i], p = s.prof[side]; if (p.drop) continue;
+        const field = Math.floor(i / 40) + side * 3;
+        if ((field * 7) % 5 === 0) continue;                    // the odd plain field
+        for (let row = 0; row < 6; row++) {
+            const off = s.w / 2 + 4 + row * 2.2, b = beside(S, i, side, off);
+            if (off > p.off[3] + 6) break;
+            mats.push(place(b.x, s.y + s.h[side] * Math.min(1, (off - p.off[2]) / Math.max(1, p.off[3] - p.off[2])) * 0.9, b.z, yaw(s), 1.4, 0.45, 2.1));
+            cols.push(C[(field + (row >> 1)) % C.length]);
+        }
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#ffffff' }), mats, cols));
+};
+// --- the autobahn ---
+// overhead gantries with blue signs, and the round white "no limit" signs
+const blueSign = (lines) => {
+    const c = document.createElement('canvas'); c.width = 128; c.height = 48; const x = c.getContext('2d');
+    x.fillStyle = '#1a4ab0'; x.fillRect(0, 0, 128, 48); x.strokeStyle = '#ffffff'; x.lineWidth = 2; x.strokeRect(3, 3, 122, 42);
+    x.fillStyle = '#ffffff'; x.font = 'bold 13px sans-serif'; x.textBaseline = 'middle';
+    lines.forEach(([t, km], k) => { x.textAlign = 'left'; x.fillText(t, 10, 15 + k * 17); x.textAlign = 'right'; x.fillText(km, 118, 15 + k * 17); });
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace; return t;
+};
+PROPS.gantries = (ctx, o) => {
+    const { S, group } = ctx, signs = [[['München', '86 km'], ['Stuttgart', '142 km']], [['Berlin', '312 km'], ['Leipzig', '128 km']], [['Köln', '64 km'], ['Ausfahrt', '2 km']], [['Hamburg', '210 km'], ['Hannover', '96 km']]];
+    const steel = cel({ color: '#9aa0a8' });
+    for (let i = 30, k = 0; i < S.length - 10; i += o.every || 110, k++) {
+        const s = S[i], hw = s.w / 2 + 2.2, g = new THREE.Group();
+        for (const sg of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.5, 8.5, 0.5), steel); p.position.set(sg * hw, 4.25, 0); g.add(p); }
+        const beam = new THREE.Mesh(new THREE.BoxGeometry(hw * 2 + 0.6, 0.6, 0.6), steel); beam.position.y = 8.5; g.add(beam);
+        const board = new THREE.Mesh(new THREE.PlaneGeometry(9, 3.4), new THREE.MeshBasicMaterial({ map: blueSign(signs[k % signs.length]), side: THREE.DoubleSide }));
+        board.position.set(s.w * 0.18, 9.9, -0.35); g.add(board);
+        g.position.set(s.x, s.y, s.z); g.rotation.y = yaw(s) + Math.PI;
+        group.add(g);
+    }
+};
+PROPS.noLimit = (ctx, o) => {
+    const { S, group } = ctx;
+    const c = document.createElement('canvas'); c.width = c.height = 32; const x = c.getContext('2d');
+    x.fillStyle = '#ffffff'; x.beginPath(); x.arc(16, 16, 15, 0, Math.PI * 2); x.fill(); x.strokeStyle = '#2a2a2a'; x.lineWidth = 1.5; x.stroke();
+    x.strokeStyle = '#1a1a1a'; x.lineWidth = 1.6; for (const d of [-4, -1.5, 1, 3.5]) { x.beginPath(); x.moveTo(6 + d, 26 + d); x.lineTo(26 + d, 6 + d); x.stroke(); }
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
+    for (let i = 14, k = 0; i < S.length; i += o.every || 70, k++) {
+        const s = S[i], b = beside(S, i, k % 2, s.w / 2 + 3.2), g = new THREE.Group();
+        const post = new THREE.Mesh(new THREE.BoxGeometry(0.15, 2.6, 0.15), cel({ color: '#8a8e94' })); post.position.y = 1.3; g.add(post);
+        const sign = new THREE.Mesh(new THREE.CircleGeometry(0.8, 16), new THREE.MeshBasicMaterial({ map: t, side: THREE.DoubleSide })); sign.position.y = 2.9; g.add(sign);
+        g.position.set(b.x, s.y, b.z); g.rotation.y = yaw(s) + Math.PI;
+        group.add(g);
+    }
+};
+// --- the redwoods ---
+// enormous trunks crowding the road
+PROPS.redwoods = (ctx, o) => {
+    const { S, group, TX } = ctx, r = rng(613), mats = [];
+    for (let i = 0; i < S.length; i += 3) for (let side = 0; side < 2; side++) {
+        if (r() > (o.density || 0.6)) continue;
+        const s = S[i], R = 1.6 + r() * 2.8, b = beside(S, i, side, s.w / 2 + 4 + R + r() * 36);
+        if (!clear(S, b.x, b.z, s.w / 2 + R + 2.5)) continue;
+        mats.push(place(b.x, s.y - 3, b.z, r() * 6, R, 110 + r() * 40, R));
+    }
+    const geo = new THREE.CylinderGeometry(0.85, 1.15, 1, 10); geo.translate(0, 0.5, 0);
+    const tex = TX.bark.clone(); tex.repeat.set(2, 18); tex.needsUpdate = true;
+    group.add(instanced(geo, cel({ map: tex }), mats));
+};
+// the drive-through tree: a giant trunk with a doorway each side where the road goes in
+PROPS.bigTree = (ctx, o) => {
+    const { S, N, group, TX, def, seg } = ctx;
+    const [a, b] = def.tunnels[0], ci = Math.round((a + b) / 2 * N) % N, c = S[ci];
+    const R = (b - a) * N * seg / 2 + 0.6, staves = 44, archTop = (c.w / 2 + 1.8) * (def.tunnelH || 0.9) + 0.6;
+    const tex = TX.bark.clone(); tex.repeat.set(1, 20); tex.needsUpdate = true;
+    const mat = cel({ map: tex });
+    const sw = 2 * Math.PI * R / staves + 0.3, H = 150;
+    for (let k = 0; k < staves; k++) {
+        const ang = k / staves * Math.PI * 2, px = c.x + Math.cos(ang) * R, pz = c.z + Math.sin(ang) * R;
+        // is this stave where the road comes through?
+        let near = 0, bd = Infinity;
+        for (let j = -30; j <= 30; j++) { const s = S[(ci + j + N) % N], d = (s.x - px) ** 2 + (s.z - pz) ** 2; if (d < bd) { bd = d; near = (ci + j + N) % N; } }
+        const s = S[near], side = Math.abs((px - s.x) * s.sx + (pz - s.z) * s.sz);
+        const y0 = side < s.w / 2 + 2.2 ? s.y + archTop : c.y - 4;
+        const m = new THREE.Mesh(new THREE.BoxGeometry(sw, H - (y0 - (c.y - 4)), 3.2), mat);
+        m.position.set(px, y0 + (H - (y0 - (c.y - 4))) / 2, pz); m.rotation.y = -ang + Math.PI / 2;
+        group.add(m);
+    }
+    // roots splaying out at the base
+    for (let k = 0; k < 7; k++) {
+        const ang = k / 7 * Math.PI * 2 + 0.3, root = new THREE.Mesh(new THREE.ConeGeometry(3, 12, 6), mat);
+        root.position.set(c.x + Math.cos(ang) * (R + 3), c.y - 1, c.z + Math.sin(ang) * (R + 3));
+        root.rotation.z = Math.cos(ang) * 1.1; root.rotation.x = -Math.sin(ang) * 1.1;
+        let skip = false; for (let j = -30; j <= 30; j += 2) { const s = S[(ci + j + N) % N]; if ((s.x - root.position.x) ** 2 + (s.z - root.position.z) ** 2 < (s.w / 2 + 4) ** 2) skip = true; }
+        if (!skip) group.add(root);
+    }
+};
+// shafts of sunlight slanting down through the canopy
+PROPS.godrays = (ctx, o) => {
+    const { S, group } = ctx, r = rng(619);
+    const m = new THREE.MeshBasicMaterial({ color: '#4a4228', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
+    for (let k = 0; k < (o.count || 14); k++) {
+        const i = (r() * S.length) | 0, s = S[i], b = beside(S, i, r() < 0.5 ? 0 : 1, r() * s.w);
+        const ray = new THREE.Mesh(new THREE.PlaneGeometry(3 + r() * 4, 90), m);
+        ray.position.set(b.x, s.y + 40, b.z); ray.rotation.set(0, r() * 6, 0.35); ray.rotateX(0.1);
+        ray.layers.set(3);
+        group.add(ray);
+    }
+};
+// --- Las Vegas ---
+PROPS.pyramid = (ctx, o) => {
+    const { S, group, anim } = ctx, i = Math.round((o.at || 0.3) * S.length) % S.length, s = S[i], b = beside(S, i, o.side || 1, s.w / 2 + 80);
+    const g = new THREE.Group();
+    const p = new THREE.Mesh(new THREE.ConeGeometry(70, 80, 4), cel({ color: '#1a1a24', emissive: '#0a0a14' })); p.rotation.y = Math.PI / 4; p.position.y = 40; g.add(p);
+    const beam = glows(new THREE.Mesh(new THREE.CylinderGeometry(1.2, 2.5, 600, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#e8f4ff', transparent: true, opacity: 0.6, side: THREE.DoubleSide, fog: false })));
+    beam.position.y = 80 + 300; g.add(beam);
+    const sphinx = new THREE.Mesh(new THREE.BoxGeometry(10, 8, 24), cel({ color: '#c8a870' })); sphinx.position.set(0, 4, 82); g.add(sphinx);
+    g.position.set(b.x, s.y - 1, b.z); group.add(g);
+    anim.push((t) => { beam.material.opacity = 0.45 + Math.sin(t * 2) * 0.1; });
+};
+
+// --- New York ---
+// Central Park: lawns over the pavement, trees, a lake, old lamp posts and benches
+PROPS.cityPark = (ctx, o) => {
+    const { S, group } = ctx, r = rng(631), N = S.length, a = Math.floor(o.from * N), b = Math.floor(o.to * N);
+    const lawn = [], trees = [], lamps = [], heads = [], benches = [];
+    for (let i = a; i < b; i += 2) for (let side = 0; side < 2; side++) {
+        const s = S[i];
+        for (let k = 0; k < 4; k++) { const off = s.w / 2 + 3 + k * 12, bb = beside(S, i, side, off); lawn.push(place(bb.x, s.y + 0.06, bb.z, yaw(s), 12.5, 1, 4.4)); }
+        if (r() < 0.7) { const bb = beside(S, i, side, s.w / 2 + 6 + r() * 40); if (clear(S, bb.x, bb.z, s.w / 2 + 4)) trees.push(place(bb.x, s.y, bb.z, r() * 3, 1.2 + r() * 0.8, 1.2 + r() * 0.8, 1.2 + r() * 0.8)); }
+        if (i % 14 === 0) { const bb = beside(S, i, side, s.w / 2 + 3); lamps.push(place(bb.x, s.y, bb.z, 0, 0.14, 4.2, 0.14)); heads.push(place(bb.x, s.y + 4.4, bb.z, 0, 0.5, 0.6, 0.5)); }
+        if (i % 22 === 6) { const bb = beside(S, i, side, s.w / 2 + 4.2); benches.push(place(bb.x, s.y, bb.z, yaw(s), 0.6, 0.5, 2.2)); }
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    const lg = new THREE.PlaneGeometry(1, 1); lg.rotateX(-Math.PI / 2);
+    group.add(instanced(lg, cel({ color: '#5a8a3a', polygonOffset: true, polygonOffsetFactor: -1 }), lawn));
+    const tex = treeTexture('leaf', 9), q1 = new THREE.PlaneGeometry(5, 9); q1.translate(0, 4.5, 0);
+    const q2 = q1.clone(); q2.rotateY(Math.PI / 2);
+    group.add(instanced(mergeGeometries([q1, q2]), cel({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide }), trees));
+    group.add(instanced(box, cel({ color: '#2a3a2a' }), lamps));
+    group.add(glows(instanced(box, new THREE.MeshBasicMaterial({ color: '#fff0c8', fog: false }), heads)));
+    group.add(instanced(box, cel({ color: '#6a4a2a' }), benches));
+    // the lake, beside the middle of the park
+    const mid = S[Math.floor((a + b) / 2)], lk = beside(S, Math.floor((a + b) / 2), 0, mid.w / 2 + 36);
+    const lake = new THREE.Mesh(new THREE.CircleGeometry(22, 20), cel({ map: ctx.TX.water, color: '#9ac0e0', polygonOffset: true, polygonOffsetFactor: -2 }));
+    lake.rotation.x = -Math.PI / 2; lake.position.set(lk.x, mid.y + 0.1, lk.z); lake.scale.set(1.4, 1, 1); group.add(lake);
+};
+// yellow cabs parked along the kerb
+PROPS.taxis = (ctx, o) => {
+    const { S, group } = ctx, r = rng(641), bodies = [], tops = [], signs = [];
+    const skip = (i) => (o.skip || []).some(([a, b]) => i / S.length >= a && i / S.length <= b);
+    for (let i = 8; i < S.length; i += 9) for (let side = 0; side < 2; side++) {
+        if (skip(i) || r() < 0.5) continue;
+        const s = S[i], bb = beside(S, i, side, s.w / 2 + 3.6), ry = yaw(s);
+        bodies.push(place(bb.x, s.y + 0.3, bb.z, ry, 1.8, 0.7, 4.4));
+        tops.push(place(bb.x, s.y + 1.0, bb.z, ry, 1.6, 0.55, 2.2));
+        signs.push(place(bb.x, s.y + 1.58, bb.z, ry, 0.7, 0.22, 0.25));
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#f4c418' }), bodies));
+    group.add(instanced(box, cel({ color: '#2a3440' }), tops));
+    group.add(glows(instanced(box, new THREE.MeshBasicMaterial({ color: '#fff4c0' }), signs)));
+};
+
+// --- 1950s Las Vegas ---
+const PASTEL = ['#7ad8c8', '#ff9a8a', '#f4ecd0', '#ffc8a0', '#a8d8f0', '#f0a8c8'];
+const NEONC = ['#ff3a6e', '#3ad0ff', '#ffd23f', '#4aff7a', '#ff9a3a', '#b04aff'];
+// low casinos and motels: long pastel blocks, a neon band along the roof, a canopy out front
+PROPS.casinos = (ctx, o) => {
+    const { S, group } = ctx, r = rng(661), walls = [], wcol = [], bands = [], bcol = [], roofs = [], posts = [];
+    for (let i = 10, k = 0; i < S.length - 6; i += 16 + ((r() * 10) | 0), k++) {
+        const side = k % 2, s = S[i], L = 28 + r() * 24, D = 16, H = 7 + r() * 5, off = s.w / 2 + 12 + D / 2;
+        const b = beside(S, i, side, off);
+        if (!clear(S, b.x, b.z, s.w / 2 + 10 + D / 2 - 2)) continue;
+        const ry = yaw(s);
+        walls.push(place(b.x, s.y - 0.3, b.z, ry, D, H, L)); wcol.push(PASTEL[k % PASTEL.length]);
+        const f = beside(S, i, side, off - D / 2 - 0.3);
+        bands.push(place(f.x, s.y + H - 1.2, f.z, ry, 0.3, 0.5, L * 0.96)); bcol.push(NEONC[k % NEONC.length]);
+        bands.push(place(f.x, s.y + 1.4, f.z, ry, 0.3, 0.25, L * 0.7)); bcol.push(NEONC[(k + 2) % NEONC.length]);
+        const c = beside(S, i, side, off - D / 2 - 4);
+        roofs.push(place(c.x, s.y + 4, c.z, ry, 8, 0.5, 10));
+        for (const dz of [-4, 4]) posts.push(place(c.x - s.sx * (side ? -3 : 3) + s.tx * dz, s.y, c.z - s.sz * (side ? -3 : 3) + s.tz * dz, ry, 0.35, 4, 0.35));
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#ffffff' }), walls, wcol));
+    group.add(glows(instanced(box, new THREE.MeshBasicMaterial({ color: '#ffffff' }), bands, bcol)));
+    group.add(instanced(box, cel({ color: '#f4f0e8' }), roofs));
+    group.add(instanced(box, cel({ color: '#c8c8c8' }), posts));
+};
+// the big vintage signs: a tall board with the name down it, chasing bulbs round the edge, an atomic star on top
+const NAMES = ['COMET', 'ATOMIC', 'SUNDOWNER', 'GOLD RUSH', 'BLUE MOON', 'STARLITE', 'SILVER SPUR', 'JACKPOT', 'DESERT STAR', 'LUCKY'];
+PROPS.pylons = (ctx, o) => {
+    const { S, group, anim } = ctx, r = rng(673);
+    const bulbs = [], stars = [];
+    for (let i = 18, k = 0; i < S.length - 6; i += o.every || 30, k++) {
+        const side = (k + 1) % 2, s = S[i], b = beside(S, i, side, s.w / 2 + 6);
+        const name = NAMES[k % NAMES.length].replace(' ', ''), [a, c] = SIGNCOL[k % SIGNCOL.length];
+        const g = new THREE.Group(), H = 16 + r() * 8, bw = 3.2, bh = name.length * 1.5 + 1;
+        for (const dx of [-1.2, 1.2]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.4, H, 0.4), cel({ color: '#d8d8d0' })); p.position.set(dx, H / 2, 0); g.add(p); }
+        const board = glows(new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), new THREE.MeshBasicMaterial({ map: vsignTex(name, a, c), side: THREE.DoubleSide })));
+        board.position.y = H - bh / 2 - 1; g.add(board);
+        // bulbs all the way round the board
+        const per = Math.round((bw + bh) * 2 / 0.5);
+        for (let j = 0; j < per; j++) {
+            const t = j / per * (bw + bh) * 2;
+            let x, y;
+            if (t < bw) { x = -bw / 2 + t; y = bh / 2; } else if (t < bw + bh) { x = bw / 2; y = bh / 2 - (t - bw); } else if (t < bw * 2 + bh) { x = bw / 2 - (t - bw - bh); y = -bh / 2; } else { x = -bw / 2; y = -bh / 2 + (t - bw * 2 - bh); }
+            bulbs.push({ g, x: x * 1.08, y: board.position.y + y * 1.06, k: j });
+        }
+        // the atomic starburst
+        const st = new THREE.Group(), sm = new THREE.MeshBasicMaterial({ color: '#fff4c0', fog: false });
+        for (let j = 0; j < 8; j++) { const ray = new THREE.Mesh(new THREE.BoxGeometry(0.18, j % 2 ? 2.2 : 3.4, 0.18), sm); ray.rotation.z = j / 8 * Math.PI * 2; st.add(ray); }
+        st.add(new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 6), sm));
+        st.position.y = H + 1.6; g.add(glows(st)); st.traverse((m) => glows(m)); stars.push(st);
+        g.position.set(b.x, s.y, b.z); g.rotation.y = yaw(s) + Math.PI + (side ? -0.55 : 0.55);     // angled to face the oncoming cars
+        group.add(g);
+    }
+    // one instanced set of bulbs; each pylon's group gives the positions
+    const geo = new THREE.SphereGeometry(0.13, 6, 4);
+    const im = glows(new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#ffffff', fog: false }), bulbs.length));
+    const v = new THREE.Vector3(), m4b = new THREE.Matrix4(), on = new THREE.Color('#fff0a0'), off = new THREE.Color('#6a3a10');
+    bulbs.forEach((bl, j) => { bl.g.updateMatrixWorld(true); v.set(bl.x, bl.y, 0.05).applyMatrix4(bl.g.matrixWorld); im.setMatrixAt(j, m4b.makeTranslation(v.x, v.y, v.z)); im.setColorAt(j, off); });
+    group.add(im);
+    let last = -1;
+    anim.push((t) => {
+        const step = Math.floor(t * 9);
+        if (step !== last) { last = step; bulbs.forEach((bl, j) => im.setColorAt(j, (bl.k + step) % 3 === 0 ? on : off)); im.instanceColor.needsUpdate = true; }
+        stars.forEach((st, k) => { st.rotation.z = t * 0.4 + k; st.visible = Math.floor(t * 3 + k) % 5 !== 0; });
+    });
+};
+// the welcome sign by the start line: a diamond, a ring of bulbs, a star on top
+PROPS.welcome = (ctx, o) => {
+    const { S, group } = ctx, i = o.at || 6, s = S[i], b = beside(S, i, o.side || 0, s.w / 2 + 7);
+    const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d');
+    x.fillStyle = '#f4f0e8'; x.beginPath(); x.moveTo(32, 2); x.lineTo(62, 32); x.lineTo(32, 62); x.lineTo(2, 32); x.fill();
+    x.fillStyle = '#ffd23f'; for (let k = 0; k < 24; k++) { const a = k / 24 * Math.PI * 2, rr = 26 / (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a))); x.fillRect(32 + Math.cos(a) * rr - 1, 32 + Math.sin(a) * rr - 1, 2, 2); }
+    x.textAlign = 'center'; x.fillStyle = '#c8282a'; x.font = 'bold 9px sans-serif'; x.fillText('WELCOME', 32, 26);
+    x.fillStyle = '#2a5aa8'; x.font = 'bold 7px sans-serif'; x.fillText('TO THE', 32, 34);
+    x.fillStyle = '#c8282a'; x.font = 'bold 9px sans-serif'; x.fillText('STRIP', 32, 44);
+    const t = new THREE.CanvasTexture(c); t.magFilter = THREE.NearestFilter; t.colorSpace = THREE.SRGBColorSpace;
+    const g = new THREE.Group();
+    for (const dx of [-1, 1]) { const p = new THREE.Mesh(new THREE.BoxGeometry(0.4, 5, 0.4), cel({ color: '#d8d8d0' })); p.position.set(dx, 2.5, 0); g.add(p); }
+    const d = glows(new THREE.Mesh(new THREE.PlaneGeometry(7, 7), new THREE.MeshBasicMaterial({ map: t, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide })));
+    d.position.y = 7.5; g.add(d);
+    const star = glows(new THREE.Mesh(new THREE.OctahedronGeometry(0.8, 0), new THREE.MeshBasicMaterial({ color: '#ff3a6e' }))); star.position.y = 11.6; g.add(star);
+    g.position.set(b.x, s.y, b.z); g.rotation.y = yaw(s) + Math.PI;
+    group.add(g);
+};
+// tail-finned cars parked at the kerb, two-tone
+PROPS.oldCars = (ctx, o) => {
+    const { S, group } = ctx, r = rng(683), bodies = [], bcol = [], tops = [], fins = [], fcol = [];
+    for (let i = 12; i < S.length; i += 7) for (let side = 0; side < 2; side++) {
+        if (r() < 0.55) continue;
+        const s = S[i], b = beside(S, i, side, s.w / 2 + 3.6), ry = yaw(s), col = PASTEL[(i + side) % PASTEL.length];
+        bodies.push(place(b.x, s.y + 0.3, b.z, ry, 2, 0.75, 5.4)); bcol.push(col);
+        tops.push(place(b.x, s.y + 1.05, b.z, ry, 1.7, 0.6, 2.4));
+        for (const sx of [-0.8, 0.8]) { const f = place(b.x + s.sx * sx - s.tx * 2.2, s.y + 1.0, b.z + s.sz * sx - s.tz * 2.2, ry, 0.12, 0.5, 1.2); fins.push(f); fcol.push(col); }
+    }
+    const box = new THREE.BoxGeometry(1, 1, 1); box.translate(0, 0.5, 0);
+    group.add(instanced(box, cel({ color: '#ffffff' }), bodies, bcol));
+    group.add(instanced(box, cel({ color: '#f4f0e8' }), tops));
+    group.add(instanced(box, cel({ color: '#ffffff' }), fins, fcol));
 };
 
 export function buildProps(ctx) {

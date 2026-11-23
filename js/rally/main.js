@@ -72,7 +72,7 @@ const VIEWS = ['chase', 'far', 'hood', 'cockpit'], VIEWN = { chase: 'CHASE', far
 if (!VIEWS.includes(CFG.view)) CFG.view = 'chase';
 const speedTxt = (ms) => CFG.units === 'mph' ? `${Math.round(ms * 2.237)} mph` : `${Math.round(ms * 3.6)} km/h`;
 // the radio: track music, or any station you like
-const STATIONS = [[null, 'STREET 104 · funk (default)'], ['world', 'STREET 104 · funk'], ['neon', 'NEON 80 · synthwave'], ['coast', 'SURF 101 · surf rock'], ['harbour', 'DOCKSIDE · drum & bass'],
+const STATIONS = [[null, 'STREET 104 · funk (default)'], ['world', 'STREET 104 · funk'], ['neon', 'BROOKLYN 92 · boom bap'], ['coast', 'SURF 101 · surf rock'], ['harbour', 'DOCKSIDE · drum & bass'],
     ['airfield', 'RUNWAY · trance'], ['autumn', 'LEAF FM · lo-fi'], ['volcano', 'MAGMA · industrial'], ['stadium', 'ARENA · big beat'], ['alpine', 'ALPINE FM · folk rock'],
     ['canyon', 'DUST 88 · desert twang'], ['jungle', 'CANOPY · tribal'], ['oldtown', 'PLAZA · polka'], ['frost', 'GLACIER · ice breaks'], ['tokyo', 'EUROBEAT 99 · eurobeat'], ['park', 'CARNIVAL · fairground'], ['moon', 'ORBIT · space ambient'], ['icelake', 'PIXEL FM · chiptune'], ['cross', 'FAST 172 · punk'], ['mine', 'DEEP · dark bass'], ['kowloon', 'NEON FM · future funk'], ['market', 'NIGHT STALL · lo-fi'], ['kyoto', 'SHRINE · taiko'], ['skyway', 'STORMFRONT · drum & bass'], ['mirage', 'MIRAGE · desert'], ['toybox', 'TOY RADIO · toy piano'], ['race1', 'RIOT 1 · electro'], ['race2', 'RIOT 2 · electro'], ['race3', 'RIOT 3 · electro']];
 if (!(CFG.radio >= 0 && CFG.radio < STATIONS.length)) CFG.radio = 0;
@@ -547,13 +547,13 @@ const bestKey = () => 'heind.rally.best.' + track.def.id;
 let race = null, raceT = 0, results = 0, cup = null, banked = false, revHold = 0;
 const rankCars = () => { const N = track.N; return [...cars].sort((a, b) => (b.done ? 1e9 - b.finishT : b.lapN * N + b.q.prog) - (a.done ? 1e9 - a.finishT : a.lapN * N + a.q.prog)); };
 const CUPS = [
-    { id: 'dirt', name: 'DIRT CUP', tracks: ['alpine', 'canyon', 'jungle', 'frost'] },
-    { id: 'city', name: 'CITY CUP', tracks: ['harbour', 'oldtown', 'neon', 'stadium'] },
-    { id: 'wild', name: 'WILD CUP', tracks: ['coast', 'autumn', 'airfield', 'volcano'] },
-    { id: 'night', name: 'NIGHT CUP', tracks: ['tokyo', 'park', 'mine', 'neon'] },
-    { id: 'frontier', name: 'FRONTIER CUP', tracks: ['cross', 'icelake', 'moon', 'frost'] },
+    { id: 'dirt', name: 'DIRT CUP', tracks: ['canyon', 'jungle', 'autumn', 'redwood'] },
+    { id: 'europe', name: 'EUROPE CUP', tracks: ['alpine', 'oldtown', 'holland', 'autobahn'] },
+    { id: 'coast', name: 'COAST CUP', tracks: ['coast', 'harbour', 'airfield', 'cross'] },
+    { id: 'extreme', name: 'EXTREME CUP', tracks: ['frost', 'icelake', 'volcano', 'moon'] },
+    { id: 'lights', name: 'CITY LIGHTS CUP', tracks: ['neon', 'vegas', 'stadium', 'park'] },
     { id: 'asia', name: 'ASIA CUP', tracks: ['kyoto', 'market', 'kowloon', 'tokyo'] },
-    { id: 'chaos', name: 'CHAOS CUP', tracks: ['toybox', 'mirage', 'skyway', 'park'] }
+    { id: 'chaos', name: 'CHAOS CUP', tracks: ['toybox', 'mirage', 'skyway', 'mine'] }
 ];
 const CUP_POINTS = [10, 8, 6, 5, 4, 3, 2, 1];
 // a car with the player's paint job and parts
@@ -1102,6 +1102,21 @@ function driving(dt) {
         drift.score += dt * (c.mk && c.mk.dir ? c.speed * 4.5 : c.slip * 32);
         drift.mult = Math.min(5, 1 + Math.floor(drift.t / 1.5));
     } else if (drift.on && c.ground && (drift.calm += dt) > 0.6) endDrift(true);
+    // slipstream: tuck in behind a car and it pulls you along
+    {
+        const fx = Math.sin(c.h), fz = Math.cos(c.h);
+        let draft = false;
+        if (c.speed > 18) for (const o of cars) {
+            if (o === c || o.out || o.wrecked > 0 || (o.npc && o.npc.far)) continue;
+            const ox = o.x - c.x, oz = o.z - c.z, fw = ox * fx + oz * fz, lat = Math.abs(ox * fz - oz * fx);
+            if (fw > 4 && fw < 22 && lat < 2.2) { draft = true; break; }
+        }
+        if (draft) {
+            c.slipT = (c.slipT || 0) + dt;
+            c.vx += fx * 5 * dt; c.vz += fz * 5 * dt;
+            if (c.slipT > 0.7 && !c.drafting) { c.drafting = true; feed('Slipstream', 0); }
+        } else { c.slipT = 0; c.drafting = false; }
+    }
     // near misses: something passes close and fast without touching
     for (const o of cars) {
         if (o === c || (o.npc && o.npc.far)) continue;
@@ -1581,8 +1596,11 @@ function arenaCards() {
         act: () => { CFG.arena = a.id; saveCfg(); openGarage(); }
     }));
 }
+let xmbCup = 0;
+const cupOfTrack = (id) => Math.max(0, CUPS.findIndex((c) => c.tracks.includes(id)));
 function trackCards() {
-    return TRACKS.map((t) => ({
+    return CUPS[xmbCup].tracks.map(trackById).map((t) => ({
+        id: t.id,
         label: t.name.toLowerCase(),
         desc: (() => {
             const best = store.get('heind.rally.best.' + t.id, null), gh = store.get('heind.rally.ghost.' + t.id, null);
@@ -1637,13 +1655,29 @@ function unpreview() {
     clearTimeout(previewT);
     previewId = null;
 }
+// the list of cups down the left of the track picker, the current one in the middle
+function drawCupList() {
+    const el = $('#xmb-cups');
+    el.hidden = carousel.kind !== 'tracks';
+    if (el.hidden) return;
+    el.innerHTML = CUPS.map((c, i) => {
+        let k = i - xmbCup; if (k > CUPS.length / 2) k -= CUPS.length; if (k < -CUPS.length / 2) k += CUPS.length;
+        return `<li class="${k === 0 ? 'on' : ''}" style="--k:${k}">${c.name.replace(' CUP', '').toLowerCase()}<small>${k === 0 ? `cup ${i + 1}/${CUPS.length}` : ''}</small></li>`;
+    }).join('');
+}
+$('#xmb-cups').addEventListener('click', (e) => {
+    const li = e.target.closest('li'); if (!li) return;
+    const k = +li.style.getPropertyValue('--k'); if (!k) return;
+    xmbCup = (xmbCup + k + CUPS.length) % CUPS.length; audio.beep(560, 0.05); openCarousel('tracks', 0);
+});
 function openCarousel(kind, sel) {
     if (kind !== 'tracks') unpreview();
     hideAll(); show('title');
     music.want('menu');
     mode = 'menu'; menu = null;
     const items = kind === 'tracks' ? trackCards() : kind === 'cups' ? cupCards() : kind === 'arenas' ? arenaCards() : MAIN_CARDS;
-    const start = sel != null ? sel : kind === 'tracks' ? Math.max(0, TRACKS.indexOf(trackById(CFG.track))) : 0;
+    if (kind === 'tracks' && sel == null) xmbCup = cupOfTrack(CFG.track);
+    const start = sel != null ? sel : kind === 'tracks' ? Math.max(0, CUPS[xmbCup].tracks.indexOf(CFG.track)) : 0;
     carousel = { kind, items, sel: start };
     $('#carousel').innerHTML = items.map((it, i) => `<button type="button" class="bcard" data-card="${i}"><span class="ctag">${it.label}</span><img src="${it.img ? it.img() : cardIcon(it.icon)}" alt="">${it.badge ? `<em class="cbadge${it.badge === 'no time' ? ' none' : ''}">${it.badge}</em>` : ''}</button>`).join('');
     $('#m-back').hidden = kind === 'main';
@@ -1661,7 +1695,8 @@ function placeCards() {
         c.style.zIndex = 10 - ak;
         c.classList.toggle('on', k === 0);
     });
-    if (carousel.kind === 'tracks') previewTrack(TRACKS[sel].id);
+    if (carousel.kind === 'tracks') previewTrack(items[sel].id);
+    drawCupList();
     $('#m-label').textContent = items[sel].label;
     $('#m-desc').textContent = items[sel].desc;
     const nu = nextUnlock();
@@ -1678,6 +1713,12 @@ function carouselInput() {
     const n = carousel.items.length;
     if (press('left')) { carousel.sel = (carousel.sel + n - 1) % n; placeCards(); audio.beep(700, 0.04); }
     if (press('right')) { carousel.sel = (carousel.sel + 1) % n; placeCards(); audio.beep(700, 0.04); }
+    if (carousel.kind === 'tracks' && (hits.has('mup') || hits.has('mdown'))) {
+        const d = press('mup') ? -1 : press('mdown') ? 1 : 0;
+        xmbCup = (xmbCup + d + CUPS.length) % CUPS.length;
+        audio.beep(560, 0.05);
+        openCarousel('tracks', Math.min(carousel.sel, CUPS[xmbCup].tracks.length - 1));
+    }
     if (press('ok')) { audio.beep(990, 0.06); carousel.items[carousel.sel].act(); }
     if (press('back') && carousel.kind !== 'main') { audio.beep(500, 0.06); const f = flow; flow = null; openCarousel('main', f ? cardIdx(FLOWC[f]) : Math.max(0, cardIdx(carousel.kind))); }
 }

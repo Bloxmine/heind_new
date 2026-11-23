@@ -182,6 +182,16 @@ export function surfaceTextures() {
             speckle(x, w, h, ['#4a4644', '#544e4a', '#423e3c', '#5c5652'], 4, 97);
             dots(x, w, h, ['#2a2626', '#6e6662'], 60, 2, 6);
         }),
+        bark: make(32, 64, (x, w, h) => {
+            speckle(x, w, h, ['#7a3a22', '#6a321c', '#844228', '#5e2c18'], 2, 151);
+            const r = rng(53); x.fillStyle = '#3a1a0e';
+            for (let i = 0; i < 9; i++) { let px = r() * 32; for (let y = 0; y < 64; y++) { px += (r() - 0.5) * 0.8; x.fillRect(px | 0, y, 1, 1); } }
+        }),
+        autobahn: make(64, 64, (x, w, h) => {
+            speckle(x, w, h, ['#3e4248', '#44484e', '#383c42', '#4a4e54'], 2, 157);
+            x.fillStyle = '#e8e8e4'; x.fillRect(3, 0, 2, 64); x.fillRect(59, 0, 2, 64);       // edge lines
+            x.fillRect(22, 0, 1, 28); x.fillRect(41, 0, 1, 28);                                  // lane dashes
+        }),
         wood: make(64, 64, (x, w, h) => {
             x.fillStyle = '#b8824a'; x.fillRect(0, 0, w, h);
             const r = rng(41);

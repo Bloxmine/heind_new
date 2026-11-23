@@ -556,3 +556,16 @@ body[data-view="cockpit"] .b-drift { top: calc(var(--gp) * 80); }
 
 /* takedowns: a wider starburst for the longer words */
 .rmsg.big.td { width: calc(var(--gp) * 150); height: calc(var(--gp) * 66); font-size: calc(var(--gp) * 24); top: calc(var(--gp) * 38); }
+
+/* the track picker: cups stacked down the left, the chosen one in a caption box, tracks across */
+.xmb-cups { position: absolute; left: calc(var(--gp) * 8); top: calc(var(--gp) * 92); margin: 0; padding: 0; list-style: none; width: calc(var(--gp) * 70); z-index: 3; }
+.xmb-cups li {
+    position: absolute; left: 0; top: calc(var(--k) * var(--gp) * 13); transform: translateY(-50%) translateX(calc(var(--k) * var(--k) * var(--gp) * -1.2));
+    white-space: nowrap; font: 400 calc(var(--gp) * 8) / 1 var(--f-comic); letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--paper); text-shadow: var(--ol); opacity: calc(1 - min(3, max(var(--k), calc(var(--k) * -1))) * 0.28); cursor: pointer; pointer-events: auto;
+    transition: top 0.2s steps(4), opacity 0.2s steps(4);
+}
+.xmb-cups li.on { padding: calc(var(--gp) * 1.5) calc(var(--gp) * 5); font-size: calc(var(--gp) * 10); color: var(--ink); background: var(--yel); border: var(--b) solid var(--ink); box-shadow: var(--sh); text-shadow: none; transform: translateY(-50%) rotate(-2deg); }
+.xmb-cups li small { display: block; margin-top: calc(var(--gp) * 1); font: 600 calc(var(--gp) * 5) / 1 var(--f-ui2); letter-spacing: 0; text-transform: none; color: var(--red); }
+.xmb-cups li.on::before { content: '\25B2'; position: absolute; left: 50%; top: calc(var(--gp) * -8); transform: translateX(-50%); font-size: calc(var(--gp) * 5); color: var(--paper); text-shadow: var(--ol); }
+.xmb-cups li.on::after { content: '\25BC'; position: absolute; left: 50%; bottom: calc(var(--gp) * -8); transform: translateX(-50%); font-size: calc(var(--gp) * 5); color: var(--paper); text-shadow: var(--ol); }

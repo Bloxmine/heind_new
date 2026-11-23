@@ -106,13 +106,13 @@ export const SONGS = {
         stab: '....x.......x...', stabType: 'organ',
         mel: '4.5.7.5.4.2.4...3.4.5.4.3.1.0...', melType: 'organ', scale: 'major', tonic: 72
     },
-    // Neon District: synthwave, gated snare, big pads
+    // New York: boom bap, a dusty break, an upright bass and a jazzy piano
     neon: {
-        bpm: 100, key: K.cmin, barsPerChord: 2, kit: 'electro', gated: true,
-        kick: 'x.......x.......', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
-        bass: 'xxxxxxxxxxxxxxxx', bassType: 'saw', filter: 900, pad: true,
-        arp: '0.1.2.1.0.1.2.1.', arpOct: 12, arpType: 'saw',
-        mel: '0...2...3...4.3.2.......0.2.3...', melType: 'square', scale: 'minor', tonic: 72
+        bpm: 92, key: K.lofi, barsPerChord: 2, kit: 'rock', swing: 0.2,
+        kick: 'x.....x...x.....', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.', open: '..............x.',
+        bass: 'x.....x...o.5...', bassType: 'pluck', filter: 700, crackle: true,
+        stab: 'x.....x.........', stabType: 'epiano',
+        mel: '..4.3.2.....0.......2.3.4.6.4...', melType: 'brass', scale: 'dorian', tonic: 70
     },
     // Seaside Cliffs: surf rock, reverb-drenched tremolo guitar
     coast: {
@@ -233,6 +233,38 @@ export const SONGS = {
         bass: 'x...5...x...5.o.', bassType: 'pluck', filter: 1200,
         arp: '0120212001202120', arpOct: 24, arpType: 'marimba',
         mel: '0.2.4.4.5.4.2...0.2.4.2.1.......', melType: 'bell', scale: 'major', tonic: 72
+    },
+    // Dutch Polders: happy hardcore, fast and bouncy
+    holland: {
+        bpm: 168, key: K.dmaj, barsPerChord: 1, kit: 'electro',
+        kick: 'x...x...x...x...', clap: '....x.......x...', hat: '..x...x...x...x.', open: '..x...x...x...x.',
+        bass: '..x...x...x...x.', bassType: 'saw', filter: 1800, pad: true,
+        arp: '0120012001200120', arpOct: 24, arpType: 'super',
+        mel: '4.4.5.4.2.0.2.4.5.7.5.4.2...0...', melType: 'square', scale: 'major', tonic: 74
+    },
+    // Autobahn: motorik, a steady pulse for a long straight road
+    autobahn: {
+        bpm: 128, key: K.am, barsPerChord: 2, kit: 'electro',
+        kick: 'x...x...x...x...', snare: '....x.......x...', hat: 'x.x.x.x.x.x.x.x.',
+        bass: 'x.x.o.x.x.x.o.x.', bassType: 'saw', filter: 1200,
+        arp: '0.1.2.1.0.1.2.1.', arpOct: 24, arpType: 'bell',
+        mel: '0.......2...4.......3...2.......', melType: 'square', scale: 'minor', tonic: 69
+    },
+    // Redwood Giants: an airy folk piece, plucks and a flute in the mist
+    redwood: {
+        bpm: 96, key: K.frost, barsPerChord: 2, kit: 'soft',
+        kick: 'x.........x.....', rim: '....x.......x...', shaker: 'x.x.x.x.x.x.x.x.',
+        bass: 'x.......x.......', bassType: 'sub', pad: true,
+        arp: '0.1.2.3.2.1.0.1.', arpOct: 12, arpType: 'marimba',
+        mel: '0...2.4...5.4.2.0.......4.2.0...', melType: 'flute', scale: 'majpent', tonic: 69
+    },
+    // Las Vegas Strip: a swinging big band
+    vegas: {
+        bpm: 150, key: K.funk, barsPerChord: 1, kit: 'rock', swing: 0.33,
+        kick: 'x.......x.......', snare: '....x.......x...', hat: 'x.xxx.xxx.xxx.xx', rim: '',
+        bass: 'x.3.5.b.x.3.5.b.', bassType: 'pluck', filter: 900,
+        stab: '..x.....x.x.....', stabType: 'brass',
+        mel: '4.5.6.5.4...2...4.5.6.7.6.......', melType: 'brass', scale: 'mixo', tonic: 67
     },
     // --- battle arenas ---
     // Colosseum: war drums and brass fanfares

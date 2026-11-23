@@ -440,6 +440,7 @@ export const SURF = {
     ice: { grip: 0.36, drag: 0.02, dust: '#dff4ff' },
     moon: { grip: 0.72, drag: 0.06, dust: '#a8a8a4' },
     toytrack: { grip: 1.05, drag: 0, dust: null },
+    autobahn: { grip: 1.0, drag: 0, dust: null },
     carpet: { grip: 0.7, drag: 0.4, dust: '#3a5a8a' },
     wood: { grip: 0.85, drag: 0.1, dust: '#c8a070' }
 };
