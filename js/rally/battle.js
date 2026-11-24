@@ -46,6 +46,30 @@ export const ARENAS = [
         props: ['floodlights', 'crane']
     },
     {
+        // built for Stunt Park (tricks only), but it's a fine place to battle too
+        id: 'stuntpark', name: 'STUNT PARK', blurb: 'kickers, a table-top and a mega ramp: big air, big tricks', stunt: true,
+        shape: 'square', R: 72, surface: 'concrete', floor: 'concrete', wall: 'concrete', song: 'skate', weather: 'dry',
+        sky: { top: '#3a7ad8', horizon: '#c8e0f4', far: '#8a9aa8', far2: '#7a8a98', near: '#5a7a5a', near2: '#4a6a4a', clouds: '#ffffff', cloudsDark: '#d8e0e8', peaks: 14, seed: 41 },
+        fog: '#d0e0ec', fogNear: 160, fogFar: 620,
+        light: { sun: '#fff4e0', amb: '#a8bcd8', ground: '#4a5a4a', dir: [-0.5, 0.75, 0.35], disc: '#fff8e0' },
+        height: (x, z) => {
+            // tall quarter-pipes all round, a table-top across the middle and a bowl in two corners
+            const e = Math.max(Math.abs(x), Math.abs(z));
+            let h = 9 * smooth(50, 72, e) ** 2;
+            if (Math.abs(z) < 10) h += 4.5 * (1 - smooth(9, 24, Math.abs(x)));
+            for (const [bx, bz, br] of [[-46, -46, 15], [46, 46, 15]]) { const d = Math.hypot(x - bx, z - bz); if (d < br) h -= 4.5 * (1 - (d / br) ** 2); }
+            return h;
+        },
+        obstacles: () => [],
+        ramps: () => [
+            { x: -28, z: -26, ry: Math.PI / 4, len: 9, hw: 3.5, h: 4 }, { x: 28, z: 26, ry: -3 * Math.PI / 4, len: 9, hw: 3.5, h: 4 },
+            { x: 28, z: -26, ry: -Math.PI / 4, len: 9, hw: 3.5, h: 4 }, { x: -28, z: 26, ry: 3 * Math.PI / 4, len: 9, hw: 3.5, h: 4 },
+            { x: 0, z: -40, ry: Math.PI, len: 16, hw: 4.5, h: 7.5 }       // the mega ramp, launching out over the table-top
+        ],
+        items: () => [[0, 0], [-40, 0], [40, 0], [0, 30], [-20, -40], [20, -40]],
+        props: ['graffiti', 'floodlights']
+    },
+    {
         id: 'skate', name: 'SKATE PARK', blurb: 'bowls, quarter-pipes and a funbox: get some air',
         shape: 'square', R: 58, surface: 'concrete', floor: 'concrete', wall: 'concrete', song: 'skate', weather: 'dry',
         sky: { top: '#2a6ac8', horizon: '#b8d8f0', far: '#7a8a9a', far2: '#6a7a8a', near: '#4a6a4a', near2: '#406040', clouds: '#ffffff', cloudsDark: '#d8e0e8', peaks: 16, seed: 13 },
@@ -298,17 +322,23 @@ export function buildArena(def, TX) {
 
 /* ---------- the rules and the bots ---------- */
 const BALLOON = ['#ff3a6e', '#3ad0ff', '#ffd23f', '#4aff7a', '#b04aff', '#ff9a3a'];
+const TAU = Math.PI * 2;
+const wrapPi = (a) => { a %= TAU; if (a > Math.PI) a -= TAU; if (a < -Math.PI) a += TAU; return a; };
+/* rule: 'balloons' (the battle), 'potato' (pass the bomb by bumping; whoever holds it when the fuse runs out is out)
+   or 'stunt' (on your own, tricks for points against the clock). */
 export class Battle {
-    constructor(arena, api) {
-        this.a = arena; this.api = api;
-        this.time = 180; this.over = false; this.order = [];
+    constructor(arena, api, rule = 'balloons') {
+        this.a = arena; this.api = api; this.rule = rule;
+        this.time = rule === 'stunt' ? 120 : rule === 'potato' ? 1e9 : 180; this.over = false; this.order = [];
         api.cars.forEach((c, k) => this.join(c, k));
+        if (rule === 'potato') this.newRound();
+        if (rule === 'stunt') { this.score = 0; this.combo = 0; this.comboT = 0; this.best = 0; api.car.stunt = true; }
     }
     join(c, k) {
-        c.balloons = 3; c.pops = 0; c.out = false; c.bInv = 0;
+        c.balloons = this.rule === 'balloons' ? 3 : 0; c.pops = 0; c.out = false; c.bInv = 0;
         const col = BALLOON[k % BALLOON.length];
         c.balloonM = [];
-        for (let b = 0; b < 3; b++) {
+        for (let b = 0; b < (this.rule === 'balloons' ? 3 : 0); b++) {
             const g = new THREE.Group();
             const ball = new THREE.Mesh(new THREE.SphereGeometry(0.42, 10, 8), cel({ color: col, emissive: col, emissiveIntensity: 0.3 }));
             ball.scale.y = 1.2; ball.position.y = 0.5; g.add(ball);
@@ -321,6 +351,7 @@ export class Battle {
     alive() { return this.api.cars.filter((c) => !c.out); }
     // a balloon gone: from a hit, a wreck or a fall into lava
     pop(c, by, why) {
+        if (this.rule !== 'balloons') return;
         if (this.over || c.out || c.bInv > 0) return;
         c.bInv = 1.6;
         c.balloons--;
@@ -342,16 +373,93 @@ export class Battle {
     finish() {
         if (this.over) return;
         this.over = true;
+        if (this.bombM) this.bombM.parent && this.bombM.parent.remove(this.bombM);
+        if (this.rule === 'stunt') {
+            this.order = [this.api.car];
+            this.api.message(`SCORE ${this.score.toLocaleString('en')}`, 3);
+            this.api.earn('Stunt Show', Math.round(this.score / 40));
+            this.api.done(this.order);
+            return;
+        }
         const left = this.alive().sort((a, b) => b.balloons - a.balloons || b.pops - a.pops);
         this.order = [...left, ...this.order];
         const win = this.order[0];
-        this.api.message(win.isPlayer ? 'YOU WIN THE BATTLE!' : `${this.api.nameOf(win).toUpperCase()} WINS`, 3, !win.isPlayer);
-        if (win.isPlayer) this.api.earn('Battle Won', 300);
+        this.api.message(win.isPlayer ? (this.rule === 'potato' ? 'LAST ONE STANDING!' : 'YOU WIN THE BATTLE!') : `${this.api.nameOf(win).toUpperCase()} WINS`, 3, !win.isPlayer);
+        if (win.isPlayer) this.api.earn(this.rule === 'potato' ? 'Hot Potato Won' : 'Battle Won', 300);
         this.api.done(this.order);
+    }
+    /* ---- hot potato ---- */
+    newRound() {
+        const alive = this.alive();
+        if (alive.length <= 1) { this.finish(); return; }
+        this.fuse = 9 + alive.length * 2; this.passCool = 1.5; this.tick = Math.ceil(this.fuse);
+        this.give(alive[(Math.random() * alive.length) | 0], null);
+    }
+    give(c, from) {
+        this.holder = c;
+        if (!this.bombM) {
+            const g = new THREE.Group();
+            const ball = new THREE.Mesh(new THREE.SphereGeometry(0.55, 12, 10), cel({ color: '#1a1a22' }));
+            const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.2, 8), cel({ color: '#6b6b80' })); cap.position.y = 0.6;
+            this.spark = glows(new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), new THREE.MeshBasicMaterial({ color: '#ffb84a' }))); this.spark.position.y = 0.85;
+            g.add(ball, cap, this.spark);
+            this.bombM = g;
+        }
+        c.mesh.root.add(this.bombM); this.bombM.position.set(0, 2.5, -0.3);
+        this.api.audio.fx('pickup');
+        if (c.isPlayer) this.api.message('YOU HAVE THE BOMB!', 1.4, true);
+        else if (from && from.isPlayer) { this.api.message('PASSED IT ON!', 1.2); this.api.earn('Bomb Passed', 30); }
+        else if (!from) this.api.message(`${this.api.nameOf(c).toUpperCase()} HAS THE BOMB`, 1.4);
+    }
+    // two cars touched (from main.js's collisions): the bomb jumps across
+    touch(a, b) {
+        if (this.rule !== 'potato' || this.over || this.passCool > 0) return;
+        const h = this.holder;
+        if (a !== h && b !== h) return;
+        const o = a === h ? b : a;
+        if (o.out) return;
+        this.passCool = 1.2;
+        this.give(o, h);
+    }
+    /* ---- stunts: car.js reports each landing in car.stuntLand ---- */
+    landed(L) {
+        const turns = (a, k = 0.6) => Math.floor((Math.abs(a) + k) / TAU);
+        const spins = turns(L.yaw, 0.9), flips = turns(L.pitch), rolls = turns(L.roll);
+        const parts = [];
+        if (spins) parts.push(`${spins * 360}`);
+        if (flips) parts.push(`${flips > 1 ? flips + 'x ' : ''}${L.pitch > 0 ? 'BACKFLIP' : 'FRONTFLIP'}`);
+        if (rolls) parts.push(`${rolls > 1 ? rolls + 'x ' : ''}BARREL ROLL`);
+        if (L.air > 1.6) parts.push('BIG AIR');
+        if (!L.clean) { if (L.air > 0.4) { this.api.message('BAILED!', 1.2, true); this.api.audio.fx('hit'); } this.combo = 0; this.comboT = 0; return; }
+        if (L.air < 0.5 && !parts.length) return;
+        let pts = Math.round(L.air * 120) + spins * 400 + flips * 900 + rolls * 700;
+        this.combo = this.comboT > 0 ? this.combo + 1 : 1; this.comboT = 3;
+        pts *= this.combo;
+        this.score += pts;
+        this.api.message(`${parts.join(' + ') || 'AIR'}  +${pts.toLocaleString('en')}${this.combo > 1 ? ` ×${this.combo}` : ''}`, 1.5);
+        this.api.audio.beep(660 + Math.min(6, this.combo) * 110, 0.12);
     }
     frame(dt) {
         if (this.over) return;
         this.time -= dt;
+        if (this.rule === 'potato') {
+            this.passCool -= dt; this.fuse -= dt;
+            if (this.spark) { const k = 0.7 + Math.random() * 0.6; this.spark.scale.setScalar(k); this.spark.material.color.set(this.fuse < 4 ? '#ff3a3a' : '#ffb84a'); }
+            if (this.fuse < this.tick - 1 && this.fuse > 0) { this.tick = Math.ceil(this.fuse); if (this.fuse < 6) this.api.audio.beep(this.fuse < 3 ? 1200 : 900, 0.06); }
+            if (this.fuse <= 0) {
+                const h = this.holder;
+                this.api.fx.boom(h.x, h.y + 1.5, h.z, '#ff9a3a', 1.6);
+                this.api.audio.fx('wreck');
+                if (this.bombM.parent) this.bombM.parent.remove(this.bombM);
+                this.eliminate(h, null);
+                if (!this.over) this.newRound();
+            }
+        }
+        if (this.rule === 'stunt') {
+            const c = this.api.car;
+            if (c.stuntLand) { const L = c.stuntLand; c.stuntLand = null; this.landed(L); }
+            this.comboT -= dt; if (this.comboT <= 0) this.combo = 0;
+        }
         for (const c of this.api.cars) {
             if (c.out) continue;
             c.bInv = Math.max(0, c.bInv - dt);
@@ -365,7 +473,18 @@ export class Battle {
         const b = c.bot, A = this.a, cars = this.api.cars;
         b.retarget -= dt; b.fireT -= dt;
         if (b.back > 0) { b.back -= dt; return { steer: b.backSteer, throttle: 0, brake: 1, handbrake: false }; }
-        if (b.retarget <= 0 || !b.target || (b.target.car && b.target.car.out)) {
+        if (this.rule === 'potato') {
+            // with the bomb: ram whoever's nearest. Without it: keep away from whoever has it
+            const h = this.holder;
+            if (h === c) {
+                let best = null, bd = Infinity;
+                for (const o of cars) { if (o === c || o.out) continue; const d = Math.hypot(o.x - c.x, o.z - c.z); if (d < bd) { bd = d; best = o; } }
+                b.target = best ? { x: best.x + best.vx * 0.4, z: best.z + best.vz * 0.4 } : { x: 0, z: 0 };
+            } else if (h && Math.hypot(h.x - c.x, h.z - c.z) < 40) {
+                const dx = c.x - h.x, dz = c.z - h.z, d = Math.hypot(dx, dz) || 1, R = A.def.R * 0.6;
+                b.target = { x: clamp(c.x + dx / d * 25, -R, R), z: clamp(c.z + dz / d * 25, -R, R) };
+            } else if (b.retarget <= 0 || !b.target) { b.retarget = 2; b.target = { x: (Math.random() - 0.5) * A.def.R, z: (Math.random() - 0.5) * A.def.R }; }
+        } else if (b.retarget <= 0 || !b.target || (b.target.car && b.target.car.out)) {
             b.retarget = 1 + Math.random();
             const foes = cars.filter((o) => o !== c && !o.out);
             let best = null, bd = Infinity;
@@ -391,7 +510,7 @@ export class Battle {
         b.stuck = c.speed < 2 ? b.stuck + dt : 0;
         if (b.stuck > 1.2) { b.stuck = 0; b.back = 0.9; b.backSteer = Math.random() < 0.5 ? -1 : 1; }
         // fire when lined up
-        if (c.slots.length && b.fireT <= 0) {
+        if (this.rule === 'balloons' && c.slots.length && b.fireT <= 0) {
             const s = c.slots[0].type;
             const o = b.target.car;
             const dist = o ? Math.hypot(o.x - c.x, o.z - c.z) : 999, ang = Math.abs(d);
@@ -408,6 +527,11 @@ export class Battle {
     }
     hud() {
         const me = this.api.car;
+        if (this.rule === 'stunt') return { big: this.score.toLocaleString('en'), of: '', line: this.combo > 1 ? `combo ×${this.combo}` : 'tricks', time: this.time, best: `best ${this.api.stuntBest().toLocaleString('en')}` };
+        if (this.rule === 'potato') {
+            const mine = this.holder === me;
+            return { big: String(Math.max(0, Math.ceil(this.fuse))), of: 's', line: `${this.alive().length}/${this.api.cars.length} left`, time: null, best: mine ? 'YOU HAVE THE BOMB' : `${this.api.nameOf(this.holder)} has it`, hot: mine };
+        }
         return { balloons: me.out ? 0 : me.balloons, left: this.alive().length, total: this.api.cars.length, time: this.time, pops: me.pops };
     }
 }

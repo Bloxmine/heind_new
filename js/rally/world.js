@@ -8,7 +8,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { cel, glows, MAIN_ONLY } from './retro.js';
 import { rng, treeTexture } from './textures.js';
 import { CARS } from './car.js';
-import { RIVALS } from './ai.js';
+import { RIVALS, traffic } from './ai.js';
 
 export const HALF = 800, SIZE = HALF * 2, CELL = 5, GN = SIZE / CELL, SEA = -1.5;
 const GW = GN + 1;
@@ -1283,7 +1283,9 @@ export class Roam {
                 if (fwd > 0 && fwd < 26 && Math.abs(dx * fz - dz * fx) < 8 && cr.lights[0].material.color.r > 0.5) vmax = Math.min(vmax, Math.max(0, (fwd - 12) * 0.6));
             }
         } else if (n.band) vmax *= n.band;
-        return { steer: clamp(-d * 2.6, -1, 1), throttle: c.speed < vmax ? 1 : 0, brake: c.speed > vmax + 2.5 ? 1 : 0, handbrake: false };
+        // don't lean on whoever is alongside (see ai.js)
+        const tr = traffic(c, cars, n.mem || (n.mem = {}));
+        return { steer: clamp(-d * 2.6 + tr.steer, -1, 1), throttle: !tr.yield && c.speed < vmax ? 1 : 0, brake: (tr.yield && c.speed > 10) || c.speed > vmax + 2.5 ? 1 : 0, handbrake: false };
     }
     resetNpc(c) {
         const n = c.npc, p = this.lanePos(n.path, n.i, n.lane);
@@ -1329,7 +1331,7 @@ export class Roam {
         W.lampHeadM.color.set('#3a3c40').lerp(this.tmpC || (this.tmpC = new THREE.Color('#ffd890')), A.lampK);
         W.poolM.color.set('#6a5a3a').multiplyScalar(A.lampK);
         W.beamM.color.set('#4a4430').multiplyScalar(0.3 + A.lampK);
-        if (car.lamps) { car.lamps.forEach((L) => { L.intensity = 34 * A.lampK; }); (car.mesh.beams || []).forEach((b) => { b.material.opacity = A.lampK; b.visible = A.lampK > 0.05; }); }
+        for (const c of api.cars) if (c.setLampK && c.lampK !== A.lampK) c.setLampK(A.lampK);
         // traffic far away
         for (const c of this.npcs) this.moveFar(c, dt, car);
         W.updTrains(dt, api.T);

@@ -131,6 +131,34 @@
                 for (const cx of [9, 15, 21]) for (let X = cx; X < cx + 3; X++) for (let Y = 18; Y < 21; Y++) P(X, Y, '#ffd23f');
                 for (let Y = 4; Y < 9; Y++) P(15, Y, '#000000');
                 P(16, 4, '#000000'); P(17, 4, '#000000');
+            }),
+            // Gravel Riot: a white rally car with a red stripe, side on
+            car: make((x, P) => {
+                shape((X, Y, d) => X >= 3 + d && X <= 29 - d && Y >= 14 + d && Y <= 24 - d && !(X < 5 + d && Y < 16 + d), '#e8e8e0', P);
+                shape((X, Y, d) => Y >= 7 + d && Y <= 15 && X >= 9 + (15 - Y) * 0.7 + d && X <= 24 - (15 - Y) * 0.5 - d, '#3b8fd4', P);
+                for (let X = 15; X < 17; X++) for (let Y = 8; Y < 15; Y++) P(X, Y, '#000000');
+                for (let X = 4; X < 29; X++) for (let Y = 18; Y < 20; Y++) P(X, Y, '#e8562a');
+                for (const cx of [9, 23]) for (let X = cx - 4; X <= cx + 4; X++) for (let Y = 21; Y <= 29; Y++) {
+                    const r = Math.hypot(X + 0.5 - cx - 0.5, Y + 0.5 - 25.5);
+                    if (r <= 4.3) P(X, Y, r <= 1.5 ? '#b4b4c4' : '#000000');
+                }
+                for (let Y = 15; Y < 17; Y++) { P(3, Y, '#ffd23f'); P(4, Y, '#ffd23f'); P(28, Y, '#b52a2a'); }
+            }),
+            // Yard Sale Showdown: a shopping cart with its price tag
+            cart: make((x, P) => {
+                for (let X = 2; X < 7; X++) P(X, 6, '#e8562a');
+                for (let Y = 6; Y < 11; Y++) P(6, Y, '#000000');
+                for (let Y = 10; Y <= 21; Y++) {
+                    const x0 = 6 + Math.round((Y - 10) * 0.3), x1 = 29 - Math.round((Y - 10) * 0.25);
+                    for (let X = x0; X <= x1; X++) {
+                        const edge = Y === 10 || Y === 21 || X === x0 || X === x1;
+                        if (edge) P(X, Y, '#000000'); else if (X % 3 === 0 || Y % 3 === 1) P(X, Y, '#6b6b80');
+                    }
+                }
+                for (let Y = 22; Y < 25; Y++) { P(10, Y, '#000000'); P(25, Y, '#000000'); }
+                for (const cx of [10, 25]) for (let X = cx - 2; X <= cx + 2; X++) for (let Y = 25; Y <= 29; Y++) if (Math.hypot(X - cx, Y - 27) <= 2.4) P(X, Y, '#2e2e3e');
+                for (let Y = 11; Y < 14; Y++) P(27, Y, '#9ca5ad');
+                for (let X = 25; X < 31; X++) for (let Y = 14; Y < 18; Y++) P(X, Y, X === 25 || X === 30 || Y === 14 || Y === 17 ? '#000000' : '#ffd23f');
             })
         };
     }
@@ -319,6 +347,19 @@
     });
 
     const dialog = S.dialog;
+
+    /* the two newer games: found as a sunken rally car and a lost shopping cart, or through the address bar */
+    S.eggRally = () => dialog({
+        title: 'GRAVEL_RIOT.EXE', icon: 'car',
+        html: "<p>a rally car from <b>Gravel Riot</b>. it took the coast road a bit too literally.</p><p>the headlights still work. start her up? (opens the game)</p>",
+        buttons: [{ label: 'floor it!', href: S.link('rally.html') }, { label: 'leave it parked' }]
+    });
+    S.eggShowdown = (legend) => dialog({
+        title: 'SHOWDOWN.EXE', icon: 'cart',
+        html: (legend ? '<p><b>YARD SALE LEGEND!</b> twenty frags without a scratch. well, six.</p>' : "<p>somebody's shopping cart. the price tag says <b>YARD SALE SHOWDOWN: everything must go!</b></p>") +
+            '<p>in Conquest it\'s a getaway car. join the showdown? (opens the game)</p>',
+        buttons: [{ label: 'join the showdown!', href: S.link('showdown.html') }, { label: legend ? 'retire undefeated' : 'not my cart' }]
+    });
 
     /* =====================================================================
        content
@@ -814,6 +855,8 @@
         sfx('click');
         if (segs.includes('atlantis')) return atlantis();
         if (segs.includes('kraken')) { lastZone = null; hud(); return O.kraken(); }
+        if (segs.some((q) => ['gravel', 'gravelriot', 'gravel_riot', 'rally'].includes(q))) { lastZone = null; hud(); return S.eggRally(); }
+        if (segs.some((q) => ['showdown', 'yardsale', 'yard_sale', 'yard_sale_showdown'].includes(q))) { lastZone = null; hud(); return S.eggShowdown(); }
         if (segs.includes('hypnospace')) { lastZone = null; hud(); return say('wrong ocean, friend.'); }
         const zone = Object.keys(ALIASES).find((z) => segs.some((s) => ALIASES[z].includes(s)));
         if (!segs.length || zone) { goZone(zone || 'surface'); lastZone = null; return; }
@@ -878,7 +921,27 @@
         });
         setTimeout(() => say("··· ––– ··· message sent. a passing whale says she'll pass it on."), at + 200);
     };
+    // typing "frag" again and again: the medals from Yard Sale Showdown, in the game's own words
+    const MEDAL_RUN = [['FIRST BLOOD', 100], ['DOUBLE KILL', 50], ['MULTI KILL', 100], ['MEGA KILL', 150], ['ULTRA KILL', 200], ['YARD SALE LEGEND', 400]];
+    let fragN = 0, fragT = 0;
+    const frag = () => {
+        if (performance.now() - fragT > 20000) fragN = 0;
+        fragT = performance.now();
+        const [name, pts] = MEDAL_RUN[fragN++];
+        const el = document.createElement('div');
+        el.className = 'medal-pop';
+        el.setAttribute('aria-hidden', 'true');
+        el.innerHTML = `<b>${name}</b><span>+${pts}</span>`;
+        document.body.append(el);
+        setTimeout(() => el.remove(), 1900);
+        sfx('pew');
+        O.burst(window.innerWidth * (0.2 + Math.random() * 0.6), window.innerHeight * (0.3 + Math.random() * 0.4), 16);
+        if (fragN === 1) say("FIRST BLOOD! that's a medal from Yard Sale Showdown. keep typing it.");
+        if (fragN === MEDAL_RUN.length) { fragN = 0; sfx('chord'); O.flash([255, 180, 58], 300); setTimeout(() => S.eggShowdown(true), 900); }
+    };
     const WORDS = {
+        vroom: () => { O.vroom(); say("VROOM! that one's from Gravel Riot. there's another parked at the very bottom."); },
+        frag,
         kraken: () => { O.kraken(); say("RELEASE THE KRAKEN! (it's mostly harmless.)"); },
         duck: () => { O.duck(); say('a rubber duck has been deployed at the surface. ↑'); },
         sos,
@@ -1002,5 +1065,5 @@
     boot();
 
     console.log('%c ><(((º>  hi there, source diver! ', 'font: 16px monospace; color: #6fdde0; background: #0b1530; padding: 6px;');
-    console.log('things to try: the konami code · type "kraken", "duck", "sos" · the address bar knows a lost city · sit still at the bottom.');
+    console.log('things to try: the konami code · type "kraken", "duck", "sos", "vroom", "frag" · the address bar knows a lost city (and a yard sale) · sit still at the bottom · something is parked down there with its lights on.');
 })();

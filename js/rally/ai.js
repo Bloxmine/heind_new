@@ -2,13 +2,34 @@
    (how fast each corner can be taken, braking early enough to get there). Drivers follow it with their
    own skill, dodge cars ahead, steer for pickups, and use power-ups with simple tactics. */
 
+import { DRIVERS } from './drivers.js';
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const wrap = (a) => { while (a > Math.PI) a -= Math.PI * 2; while (a < -Math.PI) a += Math.PI * 2; return a; };
 
-export const RIVALS = [
-    { name: 'Vex', style: 'aggressive' }, { name: 'Juno', style: 'balanced' }, { name: 'Rafe', style: 'careful' },
-    { name: 'Kiko', style: 'aggressive' }, { name: 'Sol', style: 'hoarder' }, { name: 'Nadia', style: 'balanced' }, { name: 'Bram', style: 'careful' }
-];
+/* Cars alongside. Without this every driver steers for its own line as if nobody else were there, and
+   leans on whoever is beside it all the way down the straight. mem keeps a little state per driver.
+   Returns a steering nudge away from cars beside us, and whether to drop back (we've been rubbing too long). */
+export function traffic(c, cars, mem, ignore) {
+    const fx = Math.sin(c.h), fz = Math.cos(c.h);
+    let side = 0, touching = false;
+    for (const o of cars || []) {
+        if (o === c || o === ignore || o.out || o.wrecked > 0) continue;
+        const ox = o.x - c.x, oz = o.z - c.z, fw = ox * fx + oz * fz, right = -ox * fz + oz * fx;
+        if (fw < -5 || fw > 7 || Math.abs(right) > 3.8) continue;
+        const push = 1 - Math.abs(right) / 3.8;
+        side -= (Math.sign(right) || (c.x < o.x ? -1 : 1)) * push;                // steer right = +; away from them
+        if (Math.abs(right) < 2.5 && fw > -3.5 && fw < 4.5) touching = true;
+    }
+    const now = performance.now() / 1000, dt = Math.min(0.1, now - (mem.t || now));
+    mem.t = now;
+    mem.side = (mem.side || 0) + (clamp(side, -1, 1) - (mem.side || 0)) * Math.min(1, dt * 8);
+    mem.touch = touching ? (mem.touch || 0) + dt : Math.max(0, (mem.touch || 0) - dt * 2);
+    // rubbing for a moment is racing; rubbing for longer means one of us has to give way, and it's us
+    return { steer: mem.side * 0.7, yield: mem.touch > 0.35 };
+}
+
+// the rival drivers are the characters from drivers.js (the race grid uses rivalsFor, so whoever you pick isn't racing you)
+export const RIVALS = DRIVERS.slice(0, 7);
 
 // Racing line and speed profile for a track, computed once.
 export function plan(track, grip = 1) {
@@ -41,6 +62,8 @@ export class Driver {
         this.dodge = 0; this.dodgeT = 0;
         this.think = 0.5 + Math.random();
         this.lazy = 1;                                  // rubber band, so nobody is left alone
+        this.mem = {};                                  // for traffic()
+        this.ramT = 0; this.ramCool = 2 + Math.random() * 4;
     }
     drive(ctx) {
         const c = this.car, { track } = ctx, P = plan(track, c.spec.grip);
@@ -50,6 +73,12 @@ export class Driver {
         const j = (i + look) % N, t = S[j];
         let off = P.line[j] + this.bias * 0.5 + this.dodge;
         if (this.wantPick != null) off = this.wantPick;
+        // a nemesis hunts you: anywhere near, it lines up on your bit of the road
+        const pl = ctx.player;
+        if (this.nemesis && pl && pl !== c && pl.wrecked <= 0) {
+            const gap = ((pl.q.prog - c.q.prog) % N + N) % N;
+            if (gap < 40 || gap > N - 15) off = pl.q.d / Math.max(1, S[pl.q.i].w);
+        }
         off = clamp(off, -0.4, 0.4) * t.w;
         const dx = t.x + t.sx * off - c.x, dz = t.z + t.sz * off - c.z;
         const err = wrap(Math.atan2(dx, dz) - c.h);
@@ -64,18 +93,35 @@ export class Driver {
             const ox = o.x - c.x, oz = o.z - c.z, fwd = ox * fx + oz * fz, lat = Math.abs(ox * fz - oz * fx);
             if (fwd > 0 && fwd < 7 + c.speed * 0.4 && lat < 2.4 && c.speed > o.speed) vmax = Math.min(vmax, o.speed + Math.max(0, fwd - 5.5) * 0.9);
         }
-        const over = c.speed - vmax;
+        // aggressive drivers give the player one shove now and then, not a push all the way down the straight
+        const now = performance.now() / 1000, dt = Math.min(0.1, now - (this.lastT || now));
+        this.lastT = now;
+        this.ramCool -= dt; this.ramT -= dt;
         let ram = 0;
         const p = ctx.player;
-        if (p && p !== c && this.style === 'aggressive' && p.wrecked <= 0 && c.speed > 12) {
+        if (p && p !== c && (this.style === 'aggressive' || this.nemesis) && p.wrecked <= 0 && c.speed > 12) {
             const ox = p.x - c.x, oz = p.z - c.z, fw = ox * fx + oz * fz, right = -ox * fz + oz * fx;
-            if (fw > -3 && fw < 5 && Math.abs(right) > 1.2 && Math.abs(right) < 5) ram = Math.sign(right) * 0.45;
+            const beside = fw > -3 && fw < 5 && Math.abs(right) > 1.2 && Math.abs(right) < 5;
+            if (beside && this.ramCool <= 0 && this.ramT <= 0) { this.ramT = 0.5; this.ramCool = this.nemesis ? 2.5 + Math.random() * 2 : 5 + Math.random() * 4; }
+            if (beside && this.ramT > 0) ram = Math.sign(right) * 0.5;
         }
+        const tr = traffic(c, ctx.cars, this.mem, ram ? p : null);
+        // show-offs (the title screen's drivers) kart-drift every bend: in when one is coming, out on the exit
+        let drift = false;
+        if (this.showoff) {
+            let bend = 0;
+            for (let a = 2; a < 12; a += 2) bend = Math.max(bend, Math.abs(P.kappa[(i + a + Math.floor(c.speed / 5)) % N]));
+            if (!this.drifting && bend > 0.012 && c.speed > 15 && c.ground) this.drifting = true;
+            else if (this.drifting && (bend < 0.005 || c.speed < 9)) this.drifting = false;
+            drift = this.drifting;
+        }
+        const over = c.speed - vmax;
         return {
-            steer: clamp(-err * 2.6 + ram, -1, 1),
-            throttle: over < -1 ? 1 : over < 1 ? 0.4 : 0,
-            brake: over > 3 ? clamp(over / 8, 0.3, 1) : 0,
-            handbrake: Math.abs(err) > 0.7 && c.speed > 18
+            steer: clamp(-err * 2.6 + ram + (ram ? 0 : tr.steer), -1, 1),
+            throttle: tr.yield ? 0 : over < -1 ? 1 : over < 1 ? 0.4 : 0,
+            brake: tr.yield && c.speed > 10 ? 0.25 : over > 3 ? clamp(over / 8, 0.3, 1) : 0,
+            drift,
+            handbrake: !drift && Math.abs(err) > 0.7 && c.speed > 18
         };
     }
     // called a few times a second: dodge traffic, chase pickups, fire things

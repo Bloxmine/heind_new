@@ -191,6 +191,7 @@ void main() {
     gl_FragColor = vec4(c / 255.0, 1.0);
 }`;
 
+const GLOW_W = 320, GLOW_H = 180;
 export class Post {
     constructor(renderer) {
         this.r = renderer;
@@ -218,7 +219,7 @@ export class Post {
         this.cam = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
 
         // glow: lights drawn over a black silhouette of the world, then blurred (wider sideways, for streaks)
-        const gw = RES.w / 2, gh = RES.h / 2, lin = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
+        const gw = GLOW_W, gh = GLOW_H, lin = { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter };
         this.glowRT = new THREE.WebGLRenderTarget(gw, gh, { ...lin, depthBuffer: true });
         this.blurA = new THREE.WebGLRenderTarget(gw, gh, lin);
         this.blurB = new THREE.WebGLRenderTarget(gw, gh, lin);
@@ -238,9 +239,68 @@ export class Post {
         this.mat.uniforms.tGlow.value = this.blurB.texture;
         this.glowOn = true;
         this.clearBlack = new THREE.Color(0x000000);
+        const u = this.mat.uniforms;
+        Object.assign(u, { tVM: { value: null }, tGlowS: { value: null }, uSunUV: { value: new THREE.Vector2(0.5, 0.5) }, uSunOn: { value: 0 }, uSunCol: { value: new THREE.Vector3(1, 0.9, 0.7) }, uAspect: { value: 16 / 9 }, uShafts: { value: 1 } });
+        let f = this.mat.fragmentShader;
+        // the first-person weapon comes from its own buffer, so the world keeps its depth (for outlines and the sun)
+        f = f.replace('vec3 g = toSRGB(clamp(texture2D(tDiffuse, uvS).rgb, 0.0, 1.0));', `vec3 g = toSRGB(clamp(texture2D(tDiffuse, uvS).rgb, 0.0, 1.0));
+    vec4 vmc = texture2D(tVM, vUv);
+    float onVM = step(0.5, vmc.a);
+    g = mix(g, toSRGB(clamp(vmc.rgb, 0.0, 1.0)), onVM);`);
+        f = f.replace('    if (uInkOn > 0.5) {', `    if (uInkOn > 0.5) {
+        vec2 qx = 1.0 / uRes;
+        float edgeVM = onVM * (1.0 - step(0.5, texture2D(tVM, vUv + vec2(qx.x, 0.0)).a) * step(0.5, texture2D(tVM, vUv - vec2(qx.x, 0.0)).a) * step(0.5, texture2D(tVM, vUv + vec2(0.0, qx.y)).a) * step(0.5, texture2D(tVM, vUv - vec2(0.0, qx.y)).a));
+        c = mix(c, uInk, edgeVM);
     }
-    // a small picture-in-picture (the rear-view mirror), mirrored left to right, at the top centre
-    // a sharper picture: everything renders at RES, which the options can raise
+    if (uInkOn > 0.5 && onVM < 0.5) {`);
+        f = f.replace('uniform float uSat, uCon, uVig;', `uniform float uSat, uCon, uVig;
+uniform sampler2D tGlowS;
+uniform sampler2D tVM;
+uniform vec2 uSunUV;
+uniform float uSunOn, uAspect, uShafts;
+uniform vec3 uSunCol;`);
+        f = f.replace('    g *= 1.0 - uVig * dot(vg, vg) * 2.4;', `    g *= 1.0 - uVig * dot(vg, vg) * 2.4;
+    if (uSunOn > 0.001) {
+        vec2 asp = vec2(uAspect, 1.0);
+        float r = length((vUv - uSunUV) * asp);
+        // how much of the sun itself is in view
+        float vis = 0.0;
+        for (int i = 0; i < 5; i++) { vec2 o = vec2(float(i - 2) * 0.006, float((i * 3) % 5 - 2) * 0.006); vis += step(0.99999, texture2D(tDepth, uSunUV + o).x) * (1.0 - step(0.5, texture2D(tVM, uSunUV + o).a)); }
+        vis *= 0.2;
+        // light shafts: march towards the sun and count how much open sky lies on the way
+        vec2 dl = (uSunUV - vUv) / 24.0; vec2 uv = vUv; float acc = 0.0, w = 1.0;
+        for (int i = 0; i < 24; i++) { uv += dl; vec2 cu = clamp(uv, 0.001, 0.999); acc += step(0.99999, texture2D(tDepth, cu).x) * (1.0 - step(0.5, texture2D(tVM, cu).a)) * w; w *= 0.955; }
+        acc /= 13.0;
+        // open sky all round gives a little glow; the shafts show where things cut across the sun
+        g += uSunCol * acc * exp(-r * 3.0) * 0.22 * uSunOn * uShafts;
+        // the glare round the disc, and a thin streak across
+        g += uSunCol * (exp(-r * 40.0) * 0.9 + exp(-r * 10.0) * 0.2) * uSunOn * vis;
+        g += uSunCol * exp(-abs(vUv.y - uSunUV.y) * 180.0) * exp(-abs(vUv.x - uSunUV.x) * 2.4) * 0.24 * uSunOn * vis;
+        // ghosts of the lens along the line through the middle of the screen
+        vec2 ax = vec2(0.5) - uSunUV;
+        for (int i = 1; i <= 5; i++) {
+            float k = float(i);
+            vec2 p = uSunUV + ax * (0.38 * k);
+            float rr = length((vUv - p) * asp), sz = 0.012 + 0.018 * mod(k * 1.7, 3.0);
+            vec3 tint = mix(uSunCol, vec3(0.45, 0.75, 1.0), k / 5.0);
+            g += tint * (smoothstep(sz, sz * 0.55, rr) * 0.05 + smoothstep(sz * 1.05, sz, rr) * smoothstep(sz * 0.9, sz, rr) * 0.08) * uSunOn * vis;
+        }
+    }`);
+        // soft bloom: no hard bands; the dither turns it into a gradient
+        f = f.replace('    float gq = floor(gm * 3.0 + 0.1) / 3.0;\n    g += (gm > 0.002 ? gw / gm * gq : vec3(0.0)) * uGlow;',
+            `    vec3 gs = toSRGB(clamp(texture2D(tGlowS, vUv).rgb, 0.0, 1.0));
+    g += (vec3(1.0) - exp(-(gs * 0.9 + gw * 0.3) * 1.3)) * uGlow * 0.7;`);
+        this.mat.fragmentShader = f;
+        this.mat.needsUpdate = true;
+        this.blurS = new THREE.WebGLRenderTarget(GLOW_W, GLOW_H, { minFilter: THREE.LinearFilter, magFilter: THREE.LinearFilter });
+        for (const t of [this.glowRT, this.blurA, this.blurB]) t.setSize(GLOW_W, GLOW_H);
+        u.tGlowS.value = this.blurS.texture;
+        this.rtVM = new THREE.WebGLRenderTarget(RES.w, RES.h, { minFilter: THREE.NearestFilter, magFilter: THREE.NearestFilter, depthBuffer: true });
+        u.tVM.value = this.rtVM.texture;
+        this.clearC = new THREE.Color(0, 0, 0);
+        this.vmDirty = false;
+    }
+    // the bloom is worked out at one fixed size whatever the resolution, so it looks the same (and stays soft) at all of them
     resize() {
         const old = this.rt.depthTexture;
         this.rt.depthTexture = new THREE.DepthTexture(RES.w, RES.h);
@@ -250,7 +310,8 @@ export class Post {
         const u = this.mat.uniforms;
         u.tDepth.value = this.rt.depthTexture; u.tDiffuse.value = this.rt.texture;
         u.uRes.value.set(RES.w, RES.h);
-        for (const t of [this.glowRT, this.blurA, this.blurB]) t.setSize(RES.w / 2, RES.h / 2);
+        for (const t of [this.glowRT, this.blurA, this.blurB, this.blurS]) t.setSize(GLOW_W, GLOW_H);
+        this.rtVM.setSize(RES.w, RES.h);
     }
     setInset(tex, on) {
         if (!this.inset) {
@@ -269,8 +330,7 @@ export class Post {
         if (this.inset) this.inset.visible = false;      // the mirror inset is not part of the glow
         this.quad.material = this.blur;
         this.blur.uniforms.tSrc.value = src.texture;
-        const k = RES.w / 320;    // keep the glow the same size at higher resolutions
-        this.blur.uniforms.uDir.value.set(dx * k / src.width, dy * k / src.height);
+        this.blur.uniforms.uDir.value.set(dx / src.width, dy / src.height);
         this.r.setRenderTarget(dst);
         this.r.render(this.scene, this.cam);
         this.quad.material = this.mat;
@@ -279,25 +339,39 @@ export class Post {
     renderGlow(scene, cam) {
         const r = this.r, bg = scene.background, fog = scene.fog;
         scene.background = this.clearBlack; scene.fog = null;
-        // the world as a black silhouette (so lights get hidden behind things)
+        // the world as a black silhouette (so lights get hidden behind things), then the lights themselves
         scene.overrideMaterial = this.black;
         cam.layers.set(0);
-        r.setRenderTarget(this.glowRT);
-        r.clear();
-        r.render(scene, cam);
-        // the lights themselves, depth-tested against that silhouette
+        r.setRenderTarget(this.glowRT); r.clear(); r.render(scene, cam);
         scene.overrideMaterial = null;
         cam.layers.set(GLOW);
-        const ac = r.autoClear; r.autoClear = false;
-        scene.background = null;
+        const ac = r.autoClear; r.autoClear = false; scene.background = null;
         r.render(scene, cam);
-        r.autoClear = ac;
-        scene.background = bg; scene.fog = fog;
-        // blur: sideways wide, then down, then sideways again for the anamorphic streak
-        this.blurPass(this.glowRT, this.blurA, 1.5, 0);
-        this.blurPass(this.blurA, this.blurB, 0, 1.2);
-        this.blurPass(this.blurB, this.blurA, 4, 0);
-        this.blurPass(this.blurA, this.blurB, 0, 2);
+        r.autoClear = ac; scene.background = bg; scene.fog = fog;
+        // a tight core, kept; then a wide, round halo
+        this.blurPass(this.glowRT, this.blurA, 1, 0);
+        this.blurPass(this.blurA, this.blurS, 0, 1);
+        this.blurPass(this.blurS, this.blurA, 2.6, 0);
+        this.blurPass(this.blurA, this.blurB, 0, 2.4);
+        this.blurPass(this.blurB, this.blurA, 5, 0);
+        this.blurPass(this.blurA, this.blurB, 0, 4.5);
+    }
+
+    /* Where the sun is on screen, and how strongly to draw its flare. dirToSun: a unit vector towards the sun (or moon);
+       k: 1 for the sun, smaller for the moon, 0 for none. */
+    sunFlare(cam, dirToSun, color, k = 1, shafts = 1) {
+        const u = this.mat.uniforms;
+        if (!k || !dirToSun) { u.uSunOn.value = 0; return; }
+        const v = this._sv || (this._sv = new THREE.Vector3()), f = this._sf || (this._sf = new THREE.Vector3());
+        v.copy(dirToSun).normalize().multiplyScalar(500).add(cam.position).project(cam);
+        const ahead = cam.getWorldDirection(f).dot(dirToSun) > 0;
+        const x = v.x * 0.5 + 0.5, y = v.y * 0.5 + 0.5, out = Math.max(0, -x, x - 1, -y, y - 1);
+        u.uSunUV.value.set(x, y);
+        u.uSunOn.value = ahead ? Math.max(0, 1 - out * 2.5) * k : 0;
+        u.uShafts.value = shafts;
+        const c = this._sc || (this._sc = new THREE.Color());
+        c.set(color);
+        u.uSunCol.value.set(c.r, c.g * 0.95, c.b * 0.82);
     }
     // look.mode: 'palette' (hexes), 'java' (4096 colours) or 'raw'
     setLook(look) {
@@ -326,12 +400,21 @@ export class Post {
         if (fx.drops !== undefined) { u.tDrops.value = fx.drops; u.uDropsOn.value = fx.drops ? 1 : 0; }
         if (fx.glow != null) { this.glowOn = !!fx.glow; u.uGlow.value = fx.glow ? 1.0 : 0; }
     }
-    render(scene, cam) {
-        this.mat.uniforms.uNear.value = cam.near;
-        this.mat.uniforms.uFar.value = cam.far;
+    // vmScene/vmCam: an optional first-person weapon, drawn into its own buffer so the world keeps its depth
+    render(scene, cam, vmScene, vmCam) {
+        const u = this.mat.uniforms;
+        u.uNear.value = cam.near; u.uFar.value = cam.far;
         cam.layers.set(0); cam.layers.enable(MAIN_ONLY);
         this.r.setRenderTarget(this.rt);
         this.r.render(scene, cam);
+        if (vmScene || this.vmDirty) {
+            const oc = this.r.getClearColor(this.clearC).getHex(), oa = this.r.getClearAlpha();
+            this.r.setRenderTarget(this.rtVM);
+            this.r.setClearColor(0x000000, 0); this.r.clear();
+            if (vmScene) this.r.render(vmScene, vmCam);
+            this.r.setClearColor(oc, oa);
+            this.vmDirty = !!vmScene;
+        }
         if (this.glowOn) this.renderGlow(scene, cam);
         cam.layers.set(0); cam.layers.enable(MAIN_ONLY);
         this.r.setRenderTarget(null);

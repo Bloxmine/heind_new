@@ -6,7 +6,9 @@ export class CarAudio {
         const AC = window.AudioContext || window.webkitAudioContext;
         if (!AC) return;
         const c = this.ctx = new AC();
-        this.master = c.createGain(); this.master.gain.value = this.on ? 0.45 : 0; this.master.connect(c.destination);
+        // master: the sound effects and engine; out: everything (the music joins here, so each has its own volume)
+        this.out = c.createGain(); this.out.connect(c.destination);
+        this.master = c.createGain(); this.master.gain.value = this.on ? 0.45 * (this.vol ?? 1) : 0; this.master.connect(this.out);
         // engine: two detuned saws and a square sub, through a lowpass that opens with throttle
         this.eng = c.createGain(); this.eng.gain.value = 0;
         this.lp = c.createBiquadFilter(); this.lp.type = 'lowpass'; this.lp.frequency.value = 600; this.lp.Q.value = 3;
@@ -31,7 +33,8 @@ export class CarAudio {
         this.rainN = noise('highpass', 2600, 0.4);
         this.buf = buf;
     }
-    setOn(on) { this.on = on; if (this.master) this.master.gain.setTargetAtTime(on ? 0.45 : 0, this.ctx.currentTime, 0.05); }
+    setOn(on) { this.on = on; if (this.master) this.master.gain.setTargetAtTime(on ? 0.45 * (this.vol ?? 1) : 0, this.ctx.currentTime, 0.05); }
+    setVol(v) { this.vol = v; this.setOn(this.on); }
     // rpm 0..1, throttle 0..1, slip m/s, speed m/s, rough 0..1 (gravel/grass)
     update(rpm, throttle, slip, speed, rough, air) {
         if (!this.ctx) return;

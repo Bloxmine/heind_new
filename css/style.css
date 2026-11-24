@@ -1066,3 +1066,12 @@ html.lite { scroll-behavior: auto; }
     .postcard .dither-box { width: 130px; }
     .rock { width: 170px; }
 }
+
+/* "frag" easter egg: a Yard Sale Showdown medal, in the game's own plain FPS style */
+.medal-pop { position: fixed; left: 50%; top: 34%; z-index: 9000; transform: translate(-50%, -50%); pointer-events: none; text-align: center;
+    font-family: var(--f-pixel); color: #ffb43a; text-shadow: 2px 2px 0 #000, -1px -1px 0 #000, 1px -1px 0 #000, -1px 1px 0 #000;
+    animation: medal-pop 1.9s steps(12) forwards; }
+.medal-pop b { display: block; font-size: clamp(26px, 5vw, 54px); letter-spacing: 2px; }
+.medal-pop span { display: block; font-size: 18px; color: #fff; }
+@keyframes medal-pop { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); } 12% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 80% { opacity: 1; } 100% { opacity: 0; transform: translate(-50%, -62%); } }
+@media (prefers-reduced-motion: reduce) { .medal-pop { animation: none; } }

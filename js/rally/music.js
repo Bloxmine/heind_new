@@ -319,7 +319,8 @@ export class Music {
     setup() {
         const c = this.audio.ctx;
         if (!c || this.bus) return !!c;
-        this.bus = c.createGain(); this.bus.gain.value = this.on ? 0.3 : 0; this.bus.connect(this.audio.master);
+        // (Gravel Riot's audio has an `out` past its sound effects' volume; elsewhere the music joins the master)
+        this.bus = c.createGain(); this.bus.gain.value = this.on ? this.level() : 0; this.bus.connect(this.audio.out || this.audio.master);
         // a simple feedback delay for the plucks, bells and leads
         this.delay = c.createDelay(1); this.fb = c.createGain(); this.fb.gain.value = 0.35;
         this.delay.connect(this.fb); this.fb.connect(this.delay); this.delay.connect(this.bus);
@@ -333,7 +334,10 @@ export class Music {
         this.shaper.connect(this.shaperOut); this.shaperOut.connect(this.bus);
         return true;
     }
-    setOn(on) { this.on = on; if (this.bus) this.bus.gain.setTargetAtTime(on ? 0.3 : 0, this.audio.ctx.currentTime, 0.1); }
+    // through `out` it no longer passes the master's 0.45, so it's scaled to match
+    level() { return (this.audio.out ? 0.135 : 0.3) * (this.vol ?? 1); }
+    setOn(on) { this.on = on; if (this.bus) this.bus.gain.setTargetAtTime(on ? this.level() : 0, this.audio.ctx.currentTime, 0.1); }
+    setVol(v) { this.vol = v; this.setOn(this.on); }
     play(name) {
         if (name === this.name) return;
         this.name = name;

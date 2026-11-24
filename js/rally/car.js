@@ -1,6 +1,18 @@
 /* Cars: low-poly models extruded from a side profile, and an arcade rally handling model. Forward is +z. */
 import * as THREE from 'three';
-import { cel, glows, GLOW, reflective } from './retro.js';
+import { cel, glows, GLOW, MAIN_ONLY, reflective } from './retro.js';
+
+// a soft oval of light for the road ahead of cars without real headlights
+let POOL_TEX = null;
+function poolTex() {
+    if (POOL_TEX) return POOL_TEX;
+    const c = document.createElement('canvas'); c.width = 32; c.height = 64;
+    const x = c.getContext('2d'), g = x.createRadialGradient(16, 36, 1, 16, 36, 28);
+    g.addColorStop(0, '#fff'); g.addColorStop(0.45, '#777'); g.addColorStop(1, '#000');
+    x.fillStyle = g; x.fillRect(0, 0, 32, 64);
+    POOL_TEX = new THREE.CanvasTexture(c);
+    return POOL_TEX;
+}
 
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const smooth = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
@@ -171,8 +183,12 @@ const EXTRAS = {
 export function makeCarMesh(spec) {
     const B = BODIES[spec.type];
     const root = new THREE.Group();      // yaw + position
+    // tilt: flips and barrel rolls (takedowns, stunts) turn the whole car, wheels and all, round its middle
+    const tilt = new THREE.Group(), under = new THREE.Group();
+    tilt.position.y = 0.6; under.position.y = -0.6;
+    root.add(tilt); tilt.add(under);
     const body = new THREE.Group();      // pitch, roll, bounce
-    root.add(body);
+    under.add(body);
     const extrude = (pts, width, m) => {
         const sh = new THREE.Shape(pts.map(([z, y]) => new THREE.Vector2(-z, y)));
         const g = new THREE.ExtrudeGeometry(sh, { depth: width, bevelEnabled: false });
@@ -205,6 +221,8 @@ export function makeCarMesh(spec) {
     const paint = reflective(mat({ color: spec.body, flatShading: true }), 0.5);
     const stripe = reflective(mat({ color: spec.stripe, flatShading: true }), 0.4);
     const glass = reflective(mat({ color: spec.glass || '#3a4a58', emissive: '#0a1016', flatShading: true }), 0.95);
+    // see-through enough to show who's driving (tinted glass, like the hearse's, a lot less)
+    glass.transparent = true; glass.opacity = spec.glass ? 0.85 : 0.6;
     const dark = mat({ color: '#1c1c22', flatShading: true });
     let shell;
     if (B.saucer) {
@@ -383,7 +401,7 @@ export function makeCarMesh(spec) {
         pivot.add(spin);
         pivot.position.set(sx * (B.width / 2 - 0.1 + (B.wheelW ? ww / 2 : 0)), B.wheelR, z);
         pivot.visible = !B.hideWheels;
-        root.add(pivot);
+        under.add(pivot);
         wheels.push({ pivot, spin, front: z > 0 });
     }
     // the shield: a golden glow that hugs the car (drawn only in the glow pass, so it shows as a halo),
@@ -412,11 +430,22 @@ export function makeCarMesh(spec) {
     }
     body.position.y = B.lift || 0;
     body.add(aura);
-    return { root, body, cabin, shell, hood, trim, wheels, B, tail, headStars, bubble, flames, aura };
+    return { root, tilt, body, cabin, shell, hood, trim, wheels, B, tail, headStars, bubble, flames, aura };
 }
 
 /* ---------- handling ---------- */
 // grip: how hard the tyres hold sideways. drag: extra rolling resistance off the racing surface.
+/* Tyres, chosen in the workshop before a race: grip on each surface (1 = as all-rounds), and in the wet. */
+export const TYRES = {
+    all: { name: 'ALL-ROUND', note: 'a bit of everything' },
+    slick: { name: 'SLICKS', note: 'fast on tarmac, hopeless on dirt', tarmac: 1.12, concrete: 1.12, cobble: 1.06, dirt: 0.85, gravel: 0.82, sand: 0.8, mud: 0.75, snow: 0.7, verge: 0.85, grass: 0.85, jungle: 0.85, wet: 0.82 },
+    gravel: { name: 'GRAVEL', note: 'bite on loose surfaces', tarmac: 0.94, concrete: 0.94, cobble: 0.96, dirt: 1.1, gravel: 1.12, sand: 1.1, mud: 1.1, verge: 1.08, grass: 1.08, jungle: 1.08, snow: 0.95 },
+    snow: { name: 'STUDDED', note: 'for snow and ice', snow: 1.28, tarmac: 0.88, concrete: 0.88, cobble: 0.9, wet: 1.05 },
+    wet: { name: 'WETS', note: 'deep grooves for rain and puddles', wet: 1.25, tarmac: 0.97, concrete: 0.97, mud: 1.1 }
+};
+const LOOSE = new Set(['dirt', 'gravel', 'sand', 'snow', 'mud', 'verge', 'grass', 'jungle']);
+const ROUGH = new Set(['verge', 'grass', 'sand', 'mud', 'jungle', 'rock']);
+
 export const SURF = {
     dirt: { grip: 0.82, drag: 0.02, dust: '#a58660' },
     gravel: { grip: 0.78, drag: 0.03, dust: '#b4a68c' },
@@ -484,18 +513,36 @@ export class Car {
         this.lastGy = this.y;
         this.health = 100; this.wrecked = 0; this.invuln = 1.8; this.flip = 0; this.flipRate = 0;
     }
-    // Headlights for dark tracks: two real spotlights that light the road ahead in hard cel bands,
-    // plus a faint beam that only shows up in the glow pass, as stylised haze.
-    setHeadlights(k) {
-        if (!k || this.lamps) return;
+    /* Headlights for dark tracks, plus a faint beam that only shows up in the glow pass, as stylised haze.
+       full (your car): one real spotlight that lights the road ahead in hard cel bands and casts shadows,
+       so trees, posts, signs and other cars throw long moving shadows; and a red glow behind when braking.
+       Otherwise (rivals, traffic): a soft pool of light painted on the road, which costs next to nothing. */
+    setHeadlights(k, full = true) {
+        if (!k || this.lamps || this.pool) return;
         const m = this.mesh;
-        this.lamps = [];
-        for (const sx of [-1, 1]) {
-            const L = new THREE.SpotLight('#ffe6bc', 34 * k, 75, 0.46, 0.06, 1.25);
-            L.position.set(sx * 0.58, m.B.head, m.B.len / 2 - 0.1);
-            L.target.position.set(sx * 1.4, -0.4, 24);
+        this.lampK = k;
+        if (full) {
+            this.lamps = [];
+            const L = new THREE.SpotLight('#ffe6bc', 110 * k, 90, 0.5, 0.1, 1.0);
+            L.position.set(0, m.B.head + 0.05, m.B.len / 2 - 0.05);
+            L.target.position.set(0, -0.4, 24);
+            L.castShadow = true;
+            L.shadow.mapSize.set(1024, 1024);
+            L.shadow.camera.near = 0.6;             // past the bonnet, so the car doesn't block its own lights
+            L.shadow.bias = -0.0004; L.shadow.normalBias = 0.05;
             m.body.add(L, L.target);
             this.lamps.push(L);
+            const R = new THREE.PointLight('#ff2a14', 0, 8, 1.4);
+            R.position.set(0, m.B.tail, -m.B.len / 2 - 0.5);
+            m.body.add(R);
+            this.brakeLamp = R;
+        } else {
+            const pm = new THREE.MeshBasicMaterial({ map: poolTex(), color: '#7a6a50', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+            const pool = new THREE.Mesh(new THREE.PlaneGeometry(7, 15), pm);
+            pool.rotation.x = -Math.PI / 2; pool.position.set(0, 0.1, m.B.len / 2 + 8);
+            pool.layers.set(MAIN_ONLY);
+            m.root.add(pool);
+            this.pool = pool;
         }
         const bm = new THREE.MeshBasicMaterial({ color: '#2a2216', transparent: true, opacity: k, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide, fog: false });
         for (const sx of [-1, 1]) {
@@ -507,6 +554,15 @@ export class Car {
             m.body.add(blade);
             (m.beams || (m.beams = [])).push(blade);
         }
+        this.setLampK(k);
+    }
+    // how strongly the lamps shine (free roam dims them through the day)
+    setLampK(k) {
+        this.lampK = k;
+        const on = k > 0.05;
+        if (this.lamps) for (const L of this.lamps) { L.intensity = 110 * k; L.visible = on; L.shadow.autoUpdate = on; }
+        if (this.pool) { this.pool.material.color.set('#7a6a50').multiplyScalar(k); this.pool.visible = on; }
+        for (const b of this.mesh.beams || []) { b.material.opacity = k; b.visible = on; }
     }
     place(x, y, z, h) {
         Object.assign(this, { x, y, z, h, vx: 0, vz: 0, vy: 0, w: 0, hint: null });
@@ -530,33 +586,50 @@ export class Car {
         const base = SURF[q.surface] || SURF.dirt;
         const g = this.ground;
         // rain makes everything slippery; a puddle much more so, and it drags at the wheels
-        this.inPuddle = this.track.puddleAt ? this.track.puddleAt(q) : false;
+        const P = this.perk;
+        this.inPuddle = this.track.puddleAt && P !== 'quackers' ? this.track.puddleAt(q) : false;      // Quackers floats over puddles
         const wet = this.track.wet ? 0.85 : 1;
         const offroad = sp.offroad && ['verge', 'grass', 'sand', 'snow', 'gravel'].includes(q.surface) ? 0.5 : 1;
         const surf0 = this.inPuddle ? { grip: base.grip * 0.55 * wet, drag: base.drag + 0.25 } : wet < 1 ? { grip: base.grip * wet, drag: base.drag } : base;
-        const surf = offroad < 1 ? { grip: surf0.grip, drag: surf0.drag * offroad } : surf0;
+        const surf1 = offroad < 1 ? { grip: surf0.grip, drag: surf0.drag * offroad } : surf0;
+        // tyres, the driver's perk and damage all change how much grip there is
+        const tyre = TYRES[this.tyres] || TYRES.all;
+        const dmg = clamp((70 - this.health) / 70, 0, 1);                     // 0 above 70% health
+        let gk = (tyre[q.surface] ?? 1) * (this.track.wet || this.inPuddle ? (tyre.wet ?? 1) : 1) * (1 - 0.12 * dmg);
+        if (P === 'rafe' && LOOSE.has(q.surface)) gk *= 1.08;                 // forty years on gravel
+        const surf = { grip: surf1.grip * gk, drag: P === 'bram' && ROUGH.has(q.surface) ? surf1.drag * 0.45 : surf1.drag };   // tractor driver
+        this.dmgK = dmg;
+        // a bent car pulls to one side
+        if (dmg > 0 && !this.pull) this.pull = Math.random() < 0.5 ? -1 : 1;
+        if (dmg <= 0) this.pull = 0;
 
         // steering: smoothed input, less lock at speed
-        this.steer += (inp.steer - this.steer) * Math.min(1, dt * 10);
+        this.steer += (clamp(inp.steer + (this.pull || 0) * 0.14 * (this.dmgK || 0) * (Math.abs(inp.steer) < 0.5 ? 1 : 0.4), -1, 1) - this.steer) * Math.min(1, dt * 10);
         this.braking = inp.brake > 0 && vf > 1;
         const spd = Math.abs(vf);
         // kart drifting: tap the drift button to hop, lean into a direction and the car locks into a
         // carving slide; the longer (and tighter) you hold it, the hotter the sparks and the bigger the boost
         const mk = this.mk || (this.mk = { dir: 0, charge: 0, tier: 0, held: false, pend: false, yaw: 0 });
-        // a press is remembered for a moment, so one made over a bump still hops when the wheels touch down
-        if (inp.drift && !mk.held) mk.buf = 0.2;
+        // A press arms one hop, kept for as long as the button is held: pressed over a bump, or before the car
+        // is up to speed, it still hops as soon as it can. Then, as in the kart games: steer during the hop,
+        // or keep holding and steer once you're down, and it locks into a drift that way.
+        if (this.stunt) {
+            if (inp.drift && !mk.held && g && this.wrecked <= 0) { this.vy = 6; this.y += 0.05; this.hopped = true; }
+            mk.held = !!inp.drift; inp = Object.assign({}, inp, { drift: false });
+        }
+        if (inp.drift && !mk.held) mk.armed = true;
+        if (!inp.drift) mk.armed = false;
         mk.held = !!inp.drift;
-        mk.buf = (mk.buf || 0) - dt;
-        if (mk.buf > 0 && inp.drift && !mk.dir && g && spd > 10 && vf > 0 && this.wrecked <= 0) {
-            mk.buf = 0;
+        if (mk.armed && !mk.dir && g && spd > 10 && vf > 0 && this.wrecked <= 0) {
+            mk.armed = false;
             this.vy = 4.2; this.y += 0.05; mk.pend = true; this.hopped = true;
             mk.dir = Math.abs(inp.steer) > 0.15 ? Math.sign(inp.steer) : 0;
         }
-        if (mk.pend && !mk.dir && inp.drift && Math.abs(inp.steer) > 0.15) mk.dir = Math.sign(inp.steer);
+        if (!mk.dir && inp.drift && !mk.armed && Math.abs(inp.steer) > 0.3 && spd > 10 && vf > 0 && (mk.pend || g) && this.wrecked <= 0) mk.dir = Math.sign(inp.steer);
         if (mk.dir && (!inp.drift || spd < 8 || this.wrecked > 0 || vf < 0)) this.endKart(inp.drift ? false : true);
         if (mk.dir && g) {
             const tight = clamp(this.steer * mk.dir, -1, 1);
-            mk.charge += dt * (0.75 + 0.55 * Math.max(0, tight));
+            mk.charge += dt * (0.75 + 0.55 * Math.max(0, tight)) * (P === 'kiko' ? 1.2 : 1);      // Kiko's sparks charge quicker
             const tier = mk.charge > 3.4 ? 3 : mk.charge > 2.0 ? 2 : mk.charge > 0.9 ? 1 : 0;
             if (tier > mk.tier) { mk.tier = tier; this.mkTierUp = tier; }
         }
@@ -570,16 +643,28 @@ export class Car {
             let wT = -this.steer * lock * turn;
             if (inp.handbrake && spd > 6) wT *= 1.45;
             this.w += (wT - this.w) * Math.min(1, dt * (5 + 5 * surf.grip * sp.grip));
+        } else if (this.stunt) {
+            // Stunt Park: in the air, steer to spin, gas/brake to flip forwards/backwards, hold Space to barrel roll
+            this.w += (-inp.steer * 6 - this.w) * Math.min(1, dt * 3);
+            this.pitchRate = (this.pitchRate || 0) + ((inp.brake - inp.throttle) * 6.5 - (this.pitchRate || 0)) * Math.min(1, dt * 3);
+            this.flipX = (this.flipX || 0) + this.pitchRate * dt;
+            if (inp.drift || inp.handbrake || this.rollHeld) this.flipRate += ((this.rollDir || 1) * 7 - this.flipRate) * Math.min(1, dt * 3);
+            else this.flipRate *= 1 - dt * 2;
+            const T = this.trick || (this.trick = { air: 0, yaw: 0, pitch: 0, roll: 0 });
+            T.yaw += this.w * dt; T.pitch += this.pitchRate * dt; T.roll += this.flipRate * dt;
         } else this.w *= 1 - dt * 0.5;
+        if (this.stunt && g) this.rollDir = inp.steer > 0.2 ? -1 : inp.steer < -0.2 ? 1 : this.rollDir || 1;
         this.h += this.w * dt;
 
         if (g) {
             // throttle and brakes
             if (this.nitro > 0) vf += sp.accel * 1.4 * dt * Math.max(0, 1 - vf / (sp.maxSpeed * 1.4));
             if (inp.throttle > 0) {
-                const top = sp.maxSpeed * (1 - surf.drag * 0.5) * (this.nitro > 0 ? 1.35 : 1);
+                // slipstream (draft, 0..1, from main.js) and Juno's perk lift the top speed; damage lowers it
+                const dr = this.draft || 0;
+                const top = sp.maxSpeed * (1 - surf.drag * 0.5) * (this.nitro > 0 ? 1.35 : 1) * (P === 'juno' ? 1.03 : 1) * (1 - 0.08 * dmg) * (1 + 0.07 * dr);
                 const k = vf < 0 ? 2.2 : clamp(1 - (vf / top) ** 2, 0, 1);
-                vf += sp.accel * inp.throttle * k * dt;
+                vf += sp.accel * inp.throttle * k * dt * (1 + 0.4 * dr);
             }
             if (inp.brake > 0) {
                 if (vf > 0.5) vf -= 26 * inp.brake * dt;
@@ -589,10 +674,11 @@ export class Car {
             vf -= vf * (0.06 + surf.drag) * dt;
             if (!inp.throttle && !inp.brake) vf -= Math.sign(vf) * Math.min(Math.abs(vf), 2 * dt);
             // sideways grip: low grip and the handbrake let the tail slide out
-            const lat = (inp.handbrake ? 1.3 : mk.dir ? 4.6 : 7.5) * surf.grip * sp.grip;
+            // (a kart drift is a controlled slide: it holds its line on snow nearly as well as on tarmac)
+            const lat = (inp.handbrake ? 1.3 * surf.grip : mk.dir ? 4.6 * (0.65 + 0.35 * surf.grip) : 7.5 * surf.grip) * sp.grip;
             const before = vr;
             vr *= Math.exp(-lat * dt);
-            vf -= Math.abs(before - vr) * 0.1 * Math.sign(vf); // sliding scrubs speed
+            vf -= Math.abs(before - vr) * (mk.dir ? 0.035 : 0.1) * Math.sign(vf); // sliding scrubs speed (a kart drift hardly)
         }
         this.slip = Math.abs(vr);
         this.vx = fx * vf + rx * vr;
@@ -613,7 +699,7 @@ export class Car {
                 // and kick the car's nose away from the wall
                 const sp = Math.hypot(this.vx, this.vz) || 1;
                 this.vx -= nq.sx * sg * out * 1.35; this.vz -= nq.sz * sg * out * 1.35;
-                const scrub = Math.min(0.55, (out / sp) * 0.7 + 0.03);
+                const scrub = Math.min(0.55, (out / sp) * 0.7 + 0.03) * (this.perk === 'nadia' ? 0.6 : 1);     // Nadia's clean lines
                 this.vx *= 1 - scrub; this.vz *= 1 - scrub;
                 const fwdIn = Math.sin(this.h) * nq.sx * sg + Math.cos(this.h) * nq.sz * sg;   // >0 nose into the wall
                 this.w += -sg * out * 0.09 * (fwdIn >= 0 ? 1 : -1) * Math.sign(this.vf || 1);
@@ -634,6 +720,14 @@ export class Car {
             if (!this.ground && this.vy < -5) this.land = Math.min(1, -this.vy / 14);
             this.y = gy;
             this.vy = isFinite(climb) ? clamp(climb, -40, 40) : 0;
+            // Stunt Park: how did we come down? upright is clean, anything else is a bail
+            if (this.stunt && this.trick) {
+                const wp = (a) => { a %= Math.PI * 2; if (a > Math.PI) a -= Math.PI * 2; if (a < -Math.PI) a += Math.PI * 2; return a; };
+                const clean = Math.abs(wp(this.flipX || 0)) < 0.75 && Math.abs(wp(this.flip || 0)) < 0.75;
+                this.stuntLand = Object.assign({}, this.trick, { air: this.air, clean });
+                this.trick = null; this.flipX = 0; this.pitchRate = 0;
+                if (!clean) { this.vx *= 0.3; this.vz *= 0.3; this.stall = 0.8; this.land = 1; }
+            }
             this.ground = true; this.air = 0;
             if (this.mk) this.mk.pend = false;
             if (this.flipRate) { this.flipRate = 0; this.flip = 0; this.land = Math.max(this.land, 0.8); }
@@ -658,6 +752,7 @@ export class Car {
         const m = this.mesh, q = this.q;
         m.root.position.set(this.x, this.y, this.z);
         m.tail.color.set(this.braking ? '#ff3a24' : '#6a0c06');
+        if (this.brakeLamp) this.brakeLamp.intensity = (this.lampK || 0) * (this.braking ? 7 : 1.2);
         // in a kart drift the nose swings into the corner
         const mk = this.mk;
         if (mk) { mk.yaw += ((mk.dir ? -mk.dir * 0.42 : 0) - mk.yaw) * Math.min(1, (dt || 0) * 9); }
@@ -675,7 +770,8 @@ export class Car {
         }
         m.root.rotation.order = 'YXZ';
         m.root.rotation.x = this.pitch;
-        m.body.rotation.z = this.roll + this.flip;
+        m.body.rotation.z = this.roll;          // the body leans on its springs...
+        m.tilt.rotation.set(-(this.flipX || 0), 0, this.flip);      // ...but flips take the wheels with them (front/back flips from Stunt Park)
         m.bubble.visible = this.shield > 0;
         if (this.shield > 0) {
             // a slow breathing pulse; it flickers as the shield runs out

@@ -15,7 +15,8 @@
 <script type="importmap">
 { "imports": {
     "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
-    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/",
+    "three-mesh-bvh": "https://cdn.jsdelivr.net/npm/three-mesh-bvh@0.7.8/build/index.module.js"
 } }
 </script>
 </head>
@@ -158,6 +159,16 @@
                     <footer class="bkeys"><span><kbd>&#8629;</kbd>Open</span><span><kbd>&#8592;&#8594;</kbd>Browse</span><span id="m-back"><kbd>Esc</kbd>Back</span></footer>
                 </div>
 
+                <!-- title screen: a race nobody is playing, filmed like TV (see startAttract) -->
+                <div class="ov attract" id="attract" hidden>
+                    <i class="lb lb-top"></i><i class="lb lb-bot"></i>
+                    <div class="at-logo"><span class="blogo"><span class="logo-word"></span></span><p class="at-sub">arcade rally &middot; est. 1999</p></div>
+                    <p class="at-start">PRESS START</p>
+                    <p class="at-live"><b>&#9679; LIVE</b> <span id="at-shot"></span> <span id="at-track"></span></p>
+                    <p class="at-car" id="at-car"></p>
+                    <p class="at-copy">&copy; 2026 heind_ &middot; any key</p>
+                </div>
+
                 <!-- garage: the car in 3D, its stats on the left -->
                 <div class="ov garage" id="garage" hidden>
                     <p class="bstep g-step" id="g-step" hidden></p>
@@ -181,7 +192,23 @@
                             <button type="button" data-act="cdone">Done</button>
                         </div>
                     </div>
-                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>&#8592;&#8594;</kbd>Cars</span><span><kbd>C</kbd>Paint shop</span><span><kbd>Esc</kbd>Back</span></footer>
+                    <div class="g-custom g-work" id="g-work" hidden>
+                        <h3>workshop <small id="w-fans"></small></h3>
+                        <div class="menu" id="g-wmenu">
+                            <button type="button" data-cycle="w-tyres">Tyres <em></em></button>
+                            <button type="button" data-cycle="w-eng">Engine <em></em></button>
+                            <button type="button" data-cycle="w-tyr">Suspension <em></em></button>
+                            <button type="button" data-cycle="w-arm">Armour <em></em></button>
+                            <button type="button" data-cycle="w-tune">Tuning <em></em></button>
+                            <button type="button" data-act="wdone">Done</button>
+                        </div>
+                        <p class="w-note" id="w-note"></p>
+                    </div>
+                    <div class="g-drv" id="g-drv">
+                        <div class="g-drv-row" id="g-drv-row"></div>
+                        <p class="g-drv-who"><b id="g-drv-name"></b><span id="g-drv-tag"></span><small id="g-drv-bio"></small></p>
+                    </div>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>&#8592;&#8594;</kbd>Cars</span><span><kbd>&#8593;&#8595;</kbd>Driver</span><span><kbd>C</kbd>Paint shop</span><span><kbd>U</kbd>Workshop</span><span><kbd>Esc</kbd>Back</span></footer>
                 </div>
 
                 <!-- options and controls -->
@@ -190,6 +217,9 @@
                     <div class="menu">
                         <button type="button" data-cycle="look">Look &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
                         <button type="button" data-cycle="view">Camera &#9664;<b>CHASE</b>&#9654;</button>
+                        <button type="button" data-cycle="fov">Field of view &#9664;<b>+0</b>&#9654;</button>
+                        <button type="button" data-cycle="camDist">Camera distance &#9664;<b>100%</b>&#9654;</button>
+                        <button type="button" data-cycle="hud">HUD size &#9664;<b>MEDIUM</b>&#9654;</button>
                         <button type="button" data-cycle="weather">Weather &#9664;<b>TRACK</b>&#9654;</button>
                         <button type="button" data-cycle="lines">Speed lines <b>ON</b></button>
                         <button type="button" data-cycle="res">Resolution &#9664;<b>RETRO 320</b>&#9654;</button>
@@ -202,9 +232,28 @@
                         <button type="button" data-cycle="units">Speed in &#9664;<b>KM/H</b>&#9654;</button>
                         <button type="button" data-cycle="sound">Sound <b>ON</b></button>
                         <button type="button" data-cycle="music">Music <b>ON</b></button>
+                        <button type="button" data-cycle="sfxVol">Sound volume &#9664;<b>7</b>&#9654;</button>
+                        <button type="button" data-cycle="musicVol">Music volume &#9664;<b>7</b>&#9654;</button>
+                        <button type="button" data-cycle="cb">Colour-blind colours <b>OFF</b></button>
+                        <button type="button" data-cycle="calm">Reduce flashing <b>OFF</b></button>
                         <button type="button" data-act="full">Full screen <b>OFF</b></button>
                     </div>
-                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Change</span><span><kbd>Esc</kbd>Back</span></footer>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Change</span><span><kbd>&#8592;&#8594;</kbd>Adjust</span><span><kbd>Esc</kbd>Back</span></footer>
+                </div>
+                <!-- online: host or join a race, peer to peer -->
+                <div class="ov bpanel online" id="online" hidden>
+                    <h2>online race</h2>
+                    <div class="on-row"><label>Your name <input id="on-name" maxlength="14" autocomplete="off" spellcheck="false"></label></div>
+                    <div class="menu" id="on-menu">
+                        <button type="button" data-act="ohost" id="on-host">Host a race</button>
+                        <button type="button" data-act="ojoin" id="on-join">Join with code &#9656; <input id="on-code" maxlength="4" placeholder="ABCD" autocomplete="off" spellcheck="false"></button>
+                        <button type="button" data-cycle="otrack" id="on-track" hidden>Track &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-act="ostart" id="on-start" hidden>Start the race</button>
+                        <button type="button" data-act="oleave" id="on-leave">Leave</button>
+                    </div>
+                    <p class="on-status" id="on-status"></p>
+                    <ul class="on-players" id="on-players"></ul>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>Esc</kbd>Back</span></footer>
                 </div>
                 <div class="ov bpanel" id="ctrls" hidden>
                     <h2>controls</h2>
@@ -232,6 +281,8 @@
                 <div class="ov bhud" id="hud" hidden>
                     <div class="bp b-pos"><small>Position</small><b><span id="h-pos">1</span><i>/<span id="h-of">1</span></i></b></div>
                     <div class="bp b-time"><small>Lap <i id="h-lap">1</i></small><b id="h-time">-:--.--</b><small>Best <i id="h-best">-:--.--</i></small></div>
+                    <div class="b-gap" id="h-gap" hidden><p id="h-gap-a"></p><p id="h-gap-b"></p></div>
+                    <button type="button" class="b-stuck" id="h-stuck" hidden>STUCK? <kbd>R</kbd> back on the road &middot; hold <kbd>R</kbd> to restart</button>
                     <div class="b-mirror" aria-hidden="true"></div>
                     <div class="b-hp" id="h-hp"></div>
                     <div class="b-map"><canvas id="minimap" width="64" height="64"></canvas></div>
@@ -300,6 +351,7 @@
                         <button type="button" data-act="map" id="p-map" hidden>Map</button>
                         <button type="button" data-act="photo">Photo mode</button>
                         <button type="button" data-act="restart">Restart</button>
+                        <button type="button" data-act="resetcar">Reset car to the road</button>
                         <button type="button" data-cycle="view">Camera &#9664;<b>CHASE</b>&#9654;</button>
                         <button type="button" data-cycle="look">Look &#9664;<b>NIGHT DRIVE</b>&#9654;</button>
                         <button type="button" data-cycle="sound">Sound <b>ON</b></button>
@@ -319,7 +371,7 @@
                 <button type="button" class="tbtn small" data-act="pause" aria-label="Pause">II</button>
             </div>
         </div>
-        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE drift &middot; Z/X fire &middot; C slot &middot; V camera &middot; M map &middot; H photo &middot; N radio (roam) &middot; P pause</span><span class="grow"></span></div>
+        <div class="win-status"><span>&larr;&rarr; steer &middot; &uarr; gas &middot; &darr; brake &middot; SPACE drift &middot; Z/X fire &middot; C slot &middot; V camera &middot; M map &middot; H photo &middot; N radio (roam) &middot; R reset (hold: restart) &middot; P pause</span><span class="grow"></span></div>
     </section>
 </main>
 <div id="dialogs"></div>

@@ -68,6 +68,8 @@
         chord: () => [523.3, 659.3, 784, 1046.5].forEach((f, i) => tone('triangle', f, 0, 1.1 - i * 0.15, 0.09, i * 0.09)),
         beep: (d = 0.12) => tone('sine', 740, 0, d, 0.18),
         type: () => tone('square', 1800 + Math.random() * 400, 0, 0.012, 0.015),
+        vroom: () => { tone('sawtooth', 70, 230, 0.55, 0.11); tone('square', 35, 115, 0.55, 0.05); tone('sawtooth', 230, 160, 0.45, 0.09, 0.55); noise(0.25, 0.12, 900, 0.5); },
+        kaching: () => { noise(0.06, 0.25, 4000, 0, 'highpass'); tone('square', 1568, 0, 0.09, 0.07, 0.05); tone('square', 2093, 0, 0.6, 0.07, 0.14); },
         flip: (n = 1) => { noise(0.025, Math.min(0.35, 0.04 + n * 0.006), 3500, 0, 'highpass'); if (n > 20) noise(0.03, 0.12, 2500, 0.02, 'highpass'); }
     };
 

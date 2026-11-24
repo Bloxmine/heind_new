@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Yard Sale Showdown</title>
+<meta name="description" content="Yard Sale Showdown: a fast arena shooter with pool noodles, water balloons and bottle rockets, in a dithered cel-shaded style. By Hein Dijstelbloem.">
+<meta name="theme-color" content="#141a22">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' shape-rendering='crispEdges'%3E%3Crect width='16' height='16' fill='%23141a22'/%3E%3Crect x='2' y='9' width='12' height='3' fill='%233ee06a'/%3E%3Crect x='10' y='4' width='4' height='5' fill='%233ee06a'/%3E%3Crect x='3' y='3' width='4' height='4' fill='%23ff4a6a'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bangers&family=Pixelify+Sans:wght@400;500;600;700&family=Silkscreen:wght@400;700&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/game.css">
+<link rel="stylesheet" href="css/showdown.css">
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body data-mode="loading">
+
+<header class="menubar">
+    <ul class="mb">
+        <li class="mb-item">
+            <button type="button" class="mb-btn mb-logo" aria-expanded="false" aria-label="Anchor menu"><i class="ico ico-anchor"></i></button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="about">About Yard Sale Showdown&hellip;</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="home">Back to heind.nl</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Game</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="solo">Play vs Bots&hellip;</button></li>
+                <li><button type="button" data-act="host">Host Online Game&hellip;</button></li>
+                <li><button type="button" data-act="join">Join Online Game&hellip;</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="pause">Pause <kbd>P</kbd></button></li>
+                <li><button type="button" data-act="full"><i class="chk"></i>Full Screen <kbd>F</kbd></button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-act="quit">Leave Match</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Options</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="options">Options&hellip;</button></li>
+                <li class="sep"></li>
+                <li><button type="button" data-opt="sound"><i class="chk"></i>Sound</button></li>
+                <li><button type="button" data-opt="music"><i class="chk"></i>Music</button></li>
+                <li><button type="button" data-opt="crt"><i class="chk"></i>Scanlines</button></li>
+            </ul>
+        </li>
+        <li class="mb-item">
+            <button type="button" class="mb-btn" aria-expanded="false">Help</button>
+            <ul class="mb-drop">
+                <li><button type="button" data-act="help">Controls</button></li>
+            </ul>
+        </li>
+    </ul>
+    <div class="mb-right"><span class="clock" id="clock"></span><span class="mb-app"><span class="hide-xs">Yard Sale Showdown</span></span></div>
+</header>
+
+<main class="desk">
+    <a class="desk-icon" href="index.html"><i class="di-home"></i><span>heind.nl</span></a>
+
+    <section class="win gamewin" id="gamewin" aria-label="Yard Sale Showdown">
+        <div class="mac-title">
+            <button type="button" class="box box-close" aria-label="Leave match" data-act="quit"></button>
+            <span class="mt-name"><span>Yard Sale Showdown</span></span>
+            <button type="button" class="box box-zoom" aria-label="Full screen" data-act="full"></button>
+            <button type="button" class="box box-shade" aria-label="Collapse"></button>
+        </div>
+        <div class="win-body game-body">
+            <div id="screen" class="screen crt">
+                <canvas id="game" width="640" height="360" aria-label="Game screen"></canvas>
+                <div class="scan" aria-hidden="true"></div>
+                <button type="button" class="fs-exit" data-act="full" aria-label="Exit full screen">&#10005; EXIT FULL SCREEN <kbd>F</kbd></button>
+                <div class="ov loading" id="loading"><p>BAKING THE LIGHT&hellip;</p><i class="lbar"><b id="load-bar"></b></i></div>
+
+                <!-- title -->
+                <div class="ov ys-title" id="title" hidden>
+                    <h1 class="ys-logo"><span class="l1">Yard Sale</span><span class="l2">Showdown</span></h1>
+                    <p class="ys-tag">An arena shooter with things from the shed</p>
+                    <div class="menu ys-menu">
+                        <button type="button" data-act="solo">Play vs bots</button>
+                        <button type="button" data-act="host">Host online game</button>
+                        <button type="button" data-act="join">Join online game</button>
+                        <button type="button" data-act="options">Options</button>
+                        <button type="button" data-act="help">Controls</button>
+                    </div>
+                    <footer class="bkeys"><span><kbd>&#8629;</kbd>Choose</span><span><kbd>&#8593;&#8595;</kbd>Move</span></footer>
+                </div>
+
+                <!-- match setup, for a game against bots or a hosted game -->
+                <div class="ov ys-setup" id="setup" hidden>
+                    <h2 class="su-title" id="setup-title">play vs bots</h2>
+                    <section class="su-maps"><h3>Map</h3><div class="cards" id="su-maps"></div></section>
+                    <section class="su-modes"><h3>Mode</h3><div class="cards styles" id="su-styles"></div><div class="cards" id="su-modes"></div><p class="su-desc" id="su-desc"></p></section>
+                    <aside class="su-side">
+                        <h3>Match</h3>
+                        <div class="menu">
+                            <button type="button" data-cycle="map">Map &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="mode">Mode &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="style">Style &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="bots">Bots &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="skill">Bot skill &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="frags">Kill limit &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="time">Time limit &#9664;<b></b>&#9654;</button>
+                            <button type="button" data-cycle="char">You are &#9664;<b></b>&#9654;</button>
+                            <label class="ys-name">Name <input id="name" maxlength="12" spellcheck="false" autocomplete="off"></label>
+                            <button type="button" data-act="start" id="start-btn" class="su-start">Start</button>
+                            <button type="button" data-act="back">Back</button>
+                        </div>
+                        <p class="ys-note" id="setup-note"></p>
+                    </aside>
+                </div>
+
+                <div class="ov ys-loadout" id="loadout" hidden>
+                    <h2 class="su-title">loadout</h2>
+                    <section class="lo-left">
+                        <h3>Character</h3><div class="cards chars" id="lo-chars"></div>
+                        <div id="lo-cls-wrap"><h3>Class <em id="lo-cls-note"></em></h3><div class="cards classes" id="lo-classes"></div></div>
+                        <div id="lo-kit-wrap"><h3>Your class <em id="lo-kit-note"></em></h3><div id="lo-kit"></div></div>
+                        <p class="su-desc" id="lo-desc"></p>
+                    </section>
+                    <div class="lo-right">
+                        <p class="lo-name" id="lo-name"></p>
+                        <div class="menu"><button type="button" data-act="deploy" class="su-start">Deploy</button><button type="button" data-act="back">Back</button></div>
+                    </div>
+                </div>
+
+                <div class="ov bpanel ys-join" id="join" hidden>
+                    <h2>join a game</h2>
+                    <div class="menu">
+                        <label class="ys-name">Room code <input id="code" maxlength="4" spellcheck="false" autocomplete="off" placeholder="ABCD"></label>
+                        <label class="ys-name">Name <input id="name2" maxlength="12" spellcheck="false" autocomplete="off"></label>
+                        <button type="button" data-cycle="char">You are &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-act="connect">Join</button>
+                        <button type="button" data-act="back">Back</button>
+                    </div>
+                    <p class="ys-note" id="join-note">Ask the host for the four-letter room code.</p>
+                </div>
+
+                <div class="ov bpanel" id="opts" hidden>
+                    <h2>options</h2>
+                    <div class="menu ys-cols">
+                        <button type="button" data-cycle="sens">Mouse speed &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-cycle="invert">Invert mouse <b></b></button>
+                        <button type="button" data-cycle="fov">Field of view &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-cycle="dodge">Double-tap dodge <b></b></button>
+                        <button type="button" data-cycle="assist">Pad aim assist <b></b></button>
+                        <button type="button" data-cycle="look">Look &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-cycle="res">Resolution &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-cycle="fps">Frames &#9664;<b></b>&#9654;</button>
+                        <button type="button" data-cycle="ink">Ink outlines <b></b></button>
+                        <button type="button" data-cycle="glow">Light glow <b></b></button>
+                        <button type="button" data-cycle="crt">Scanlines <b></b></button>
+                        <button type="button" data-cycle="sound">Sound <b></b></button>
+                        <button type="button" data-cycle="music">Music <b></b></button>
+                        <button type="button" data-act="back">Back</button>
+                    </div>
+                </div>
+
+                <div class="ov bpanel" id="ctrls" hidden>
+                    <h2>controls</h2>
+                    <dl class="bctrl ys-ctrl">
+                        <dt>W A S D</dt><dd>run</dd>
+                        <dt>MOUSE</dt><dd>look &middot; left fire &middot; right alt-fire</dd>
+                        <dt>SPACE</dt><dd>jump (out of a slide: keep the speed)</dd>
+                        <dt>SHIFT / C</dt><dd>slide when running, else crouch</dd>
+                        <dt>DOUBLE-TAP</dt><dd>W A S D to dodge</dd>
+                        <dt>E / G</dt><dd>Conquest: get in or out of a vehicle &middot; throw your class&rsquo;s kit</dd>
+                        <dt>G / Q / L</dt><dd>Tactical: lethal &middot; tactical &middot; change loadout (when down)</dd>
+                        <dt>1 &ndash; 9 / WHEEL</dt><dd>weapons (1 again: next melee) &middot; Q last</dd>
+                        <dt>TAB</dt><dd>scores</dd>
+                        <dt>ESC / P</dt><dd>pause &middot; F full screen</dd>
+                        <dt>PAD</dt><dd>sticks &middot; RT/LT fire &middot; A jump &middot; B slide &middot; X dodge &middot; LB/RB weapons</dd>
+                    </dl>
+                    <div class="menu"><button type="button" data-act="back">Back</button></div>
+                </div>
+
+                <!-- in game -->
+                <div class="ov ys-hud" id="hud" hidden>
+                    <div class="xh" id="xh"><i></i><i></i><i></i><i></i></div>
+                    <div class="hitm" id="hitm"></div>
+                    <i class="hurtfx" id="hurtfx"></i>
+                    <div class="dmg" id="dmg"></div>
+                    <div class="pows" id="pows"></div>
+                    <div class="zoom" id="zoom" hidden></div>
+                    <div class="h-top">
+                        <b id="h-time">8:00</b>
+                        <span id="h-teams" hidden><i class="t0" id="h-t0">0</i><i class="t1" id="h-t1">0</i></span>
+                    </div>
+                    <div class="h-rank"><b id="h-rank">1ST</b><small id="h-pts">0 PTS</small><small id="h-kills">0 / 20</small></div>
+                    <div class="h-room" id="h-room" hidden></div>
+                    <ul class="h-feed" id="h-feed"></ul>
+                    <div class="h-medal" id="h-medal"></div>
+                    <p class="h-center" id="h-center"></p>
+                    <p class="h-pick" id="h-pick"></p>
+                    <ul class="h-pw" id="h-pw"></ul>
+                    <div class="h-vital"><span class="hp"><small>HP</small><b id="h-hp">100</b></span><span class="ar"><small>ARMOR</small><b id="h-ar">0</b></span></div>
+                    <div class="h-ammo"><small id="h-wname">WATER PISTOL</small><b id="h-ammo">50</b><em id="h-alt"></em></div>
+                    <ol class="h-slots" id="h-slots"></ol>
+                    <ul class="h-flags" id="h-flags" hidden></ul>
+                    <div class="h-cap" id="h-cap" hidden><small id="h-cap-t">CAPTURING</small><i><b id="h-cap-b"></b></i></div>
+                    <p class="h-prompt" id="h-prompt" hidden></p>
+                    <div class="h-veh" id="h-veh" hidden><small id="h-veh-n"></small><i><b id="h-veh-b"></b></i></div>
+                    <div class="deploy" id="deploy" hidden>
+                        <h3>class <em>1&ndash;5</em></h3><ol id="dp-classes"></ol>
+                        <h3 id="dp-spawn-h">spawn at <em>A / D</em></h3><ul id="dp-spawns"></ul>
+                        <p id="dp-go"></p>
+                    </div>
+                </div>
+                <div class="ov bpanel ys-scores" id="scores" hidden>
+                    <h2 id="sc-title">scores</h2>
+                    <table class="sc"><thead><tr><th></th><th>player</th><th>pts</th><th>kills</th><th>deaths</th><th>ping</th></tr></thead><tbody id="sc-body"></tbody></table>
+                    <p class="ys-note" id="sc-note"></p>
+                </div>
+                <div class="ov bpanel" id="pause" hidden>
+                    <h2>paused</h2>
+                    <div class="menu">
+                        <button type="button" data-act="resume">Resume</button>
+                        <button type="button" data-act="options">Options</button>
+                        <button type="button" data-act="help">Controls</button>
+                        <button type="button" data-act="quit">Leave match</button>
+                    </div>
+                    <p class="ys-note" id="pause-note"></p>
+                </div>
+                <div class="ov bpanel ys-results" id="results" hidden>
+                    <h2 id="res-title">results</h2>
+                    <table class="sc"><thead><tr><th></th><th>player</th><th>pts</th><th>kills</th><th>deaths</th><th>best</th></tr></thead><tbody id="res-body"></tbody></table>
+                    <p class="ys-note" id="res-note"></p>
+                    <div class="menu row" id="res-menu"></div>
+                </div>
+                <p class="ys-click" id="click" hidden>CLICK TO PLAY</p>
+                <i class="flash" id="flash"></i>
+                <i class="flashed" id="flashed"></i>
+                <p class="btoast" id="toast" hidden></p>
+            </div>
+        </div>
+        <div class="win-status"><span>WASD run &middot; mouse aim &amp; fire &middot; SPACE jump &middot; SHIFT slide &middot; double-tap dodge &middot; 1&ndash;9 weapons &middot; TAB scores &middot; ESC pause</span><span class="grow"></span></div>
+    </section>
+</main>
+<div id="dialogs"></div>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id="pix" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+        <feFlood x="1" y="1" width="1" height="1"/>
+        <feComposite id="pix-c" width="2" height="2"/>
+        <feTile result="grid"/>
+        <feComposite in="SourceGraphic" in2="grid" operator="in"/>
+        <feMorphology id="pix-m" operator="dilate" radius="1"/>
+    </filter>
+</svg>
+
+<script>window.SEA = window.SEA || {};</script>
+<script src="js/dither.js"></script>
+<script type="module" src="js/fps/main.js"></script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { addSigns } from './signs.js';
 import { buildProps } from './scenery.js';
 
 const SEG = 2;            // metres between samples
+const cutCache = new Map();  // the shortcuts found for each track (finding them takes a moment)
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const lerp = (a, b, k) => a + (b - a) * k;
 const pnoise = (s, seed) => {
@@ -360,6 +361,142 @@ export function buildTrack(def, TX) {
         };
     };
 
+    /* ---------- shortcuts and secret routes ----------
+       Found by looking for bends where a straight dirt causeway across the inside saves a good stretch of road
+       without crossing the road anywhere else or ducking under a bank. The best one is a signed shortcut; a second
+       one, if there is one, is a secret route, unsigned. On a cut, query() answers from the cut instead: its own
+       walls and height, and a lap progress blended between its two ends, so laps and positions still add up. */
+    const hwMain = def.width / 2, cuts = [];
+    const cutKey = def.id + ':' + def.width + ':' + N;
+    if (cutCache.has(cutKey)) cuts.push(...cutCache.get(cutKey).map((c) => Object.assign({}, c)));
+    else if (!def.noCuts && !def.isWorld) {
+        // a coarse grid of the samples, so "nearest bit of road" is quick while hunting for cuts
+        const G = new Map(), cell = 20, key = (x, z) => Math.floor(x / cell) + ',' + Math.floor(z / cell);
+        S.forEach((s2, i) => { const k = key(s2.x, s2.z); if (!G.has(k)) G.set(k, []); G.get(k).push(i); });
+        const near = (x, z) => {
+            const cx = Math.floor(x / cell), cz = Math.floor(z / cell);
+            let best = -1, bd = Infinity;
+            for (let r = 1; r <= 3 && best < 0; r++) for (let gx = cx - r; gx <= cx + r; gx++) for (let gz = cz - r; gz <= cz + r; gz++) {
+                for (const i of G.get(gx + ',' + gz) || []) { const d = (S[i].x - x) ** 2 + (S[i].z - z) ** 2; if (d < bd) { bd = d; best = i; } }
+            }
+            return best;
+        };
+        const cand = [];
+        for (let i = 30; i < N - 30; i += 4) {
+            const a = S[i];
+            if (a.tunnel || a.bridge) continue;
+            // the longest stretch first: the first that fits is the best from here
+            for (let L = 170; L >= 50; L -= 10) {
+                const j = i + Math.round(L / seg);
+                if (j >= N - 20) continue;
+                const b = S[j];
+                if (b.tunnel || b.bridge || Math.abs(b.y - a.y) > 4) continue;
+                // which side is the inside: towards the middle of the chord
+                const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+                const side = Math.sign((mx - a.x) * a.sx + (mz - a.z) * a.sz) || 1;
+                const ax = a.x + a.sx * side * hwMain * 0.6, az = a.z + a.sz * side * hwMain * 0.6;
+                const bx = b.x + b.sx * side * hwMain * 0.6, bz = b.z + b.sz * side * hwMain * 0.6;
+                const len = Math.hypot(bx - ax, bz - az), gain = L - len;
+                if (len < 25 || gain < 30) continue;
+                // never back over the road; over a bank it rides on top (a little crest), but not over a hill
+                let ok = true;
+                const hs = [];
+                const n = Math.max(2, Math.round(len / 4));
+                for (let k = 0; k <= n && ok; k++) {
+                    const u = k / n, x = ax + (bx - ax) * u, z = az + (bz - az) * u;
+                    let y = a.y + (b.y - a.y) * u;
+                    const d = u * len;
+                    if (d > 7 && d < len - 7) {
+                        const ni = near(x, z);
+                        if (ni >= 0) {
+                            const q = query(x, z, ni);
+                            if (q.ad < hwMain + 4) ok = false;
+                            else if (q.ad < hwMain + 30 && q.y > y) { if (q.y - y > 4) ok = false; else y = q.y + 0.05; }
+                        }
+                    }
+                    hs.push(y);
+                }
+                if (ok) { cand.push({ i, j, side, ax, az, bx, bz, len, gain, ay: a.y, by: b.y, hs }); break; }
+            }
+        }
+        cand.sort((p, q) => q.gain - p.gain);
+        for (const c of cand) {
+            if (cuts.length >= 2) break;
+            if (cuts.some((o) => c.i < o.j + 20 && c.j > o.i - 20)) continue;
+            cuts.push(c);
+        }
+        cutCache.set(cutKey, cuts.map((c) => Object.assign({}, c)));
+    }
+    {
+        cuts.forEach((c, k) => {
+            const ux = (c.bx - c.ax) / c.len, uz = (c.bz - c.az) / c.len;
+            Object.assign(c, { ux, uz, lx: -uz, lz: ux, hw: 3.4, secret: k === 1, surface: def.surface === 'snow' ? 'snow' : 'dirt' });
+            for (let r = 0; r < 2; r++) c.hs = c.hs.map((y, n, A) => (n === 0 || n === A.length - 1 ? y : Math.max(y, (A[n - 1] + 2 * y + A[n + 1]) / 4)));
+            c.yAt = (u) => { const f = clamp(u, 0, 1) * (c.hs.length - 1), n = Math.min(c.hs.length - 2, Math.floor(f)); return lerp(c.hs[n], c.hs[n + 1], f - n); };
+        });
+    }
+    const queryMain = query;
+    const queryAll = (x, z, hint) => {
+        const q = queryMain(x, z, hint);
+        if (!cuts.length || q.ad < hwMain + 0.5) return q;
+        for (const c of cuts) {
+            const dx = x - c.ax, dz = z - c.az, u = (dx * c.ux + dz * c.uz) / c.len;
+            if (u < -0.03 || u > 1.03) continue;
+            const dl = dx * c.lx + dz * c.lz, adl = Math.abs(dl);
+            if (adl > c.hw + 2.4) continue;
+            const uc = clamp(u, 0, 1), y = c.yAt(uc), prog = c.i + (c.j - c.i) * uc;
+            return {
+                i: Math.floor(prog), t: prog % 1, prog, d: dl, ad: adl, side: dl >= 0 ? 0 : 1,
+                cx: c.ax + c.ux * c.len * uc, cz: c.az + c.uz * c.len * uc, cy: y, sx: c.lx, sz: c.lz, tx: c.ux, tz: c.uz,
+                y: y - Math.max(0, adl - c.hw) * 0.25, wall: c.hw + 1.6, surface: adl < c.hw ? c.surface : 'verge', cut: c
+            };
+        }
+        return q;
+    };
+    // the causeways themselves, with earth sides down to the ground, and a sign at a shortcut's mouth
+    for (const c of cuts) {
+        const seg2 = Math.max(4, Math.round(c.len / 4)), pos = [], uv = [], idx = [];
+        const top = c.hw + 0.6;
+        for (let k = 0; k <= seg2; k++) {
+            const u = k / seg2, x = c.ax + (c.bx - c.ax) * u, z = c.az + (c.bz - c.az) * u, y = c.yAt(u) + 0.04;
+            const drop = clamp(y - def.groundY + 0.5, 0.5, 12);
+            for (const [o, yy] of [[-top - drop, y - drop], [-top, y], [top, y], [top + drop, y - drop]]) { pos.push(x + c.lx * o, yy, z + c.lz * o); uv.push(o / 4, u * c.len / 4); }
+            if (k) { const b = (k - 1) * 4, n = k * 4; for (let e = 0; e < 3; e++) idx.push(b + e, n + e, b + e + 1, b + e + 1, n + e, n + e + 1); }
+        }
+        const g = new THREE.BufferGeometry();
+        g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+        g.setIndex(idx); g.computeVertexNormals();
+        const tex = (TX[c.surface] || TX.dirt).clone(); tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.needsUpdate = true;
+        group.add(new THREE.Mesh(g, cel({ map: tex, side: THREE.DoubleSide }, false)));
+        if (!c.secret) {
+            const cv = document.createElement('canvas'); cv.width = 64; cv.height = 24;
+            const x = cv.getContext('2d'); x.fillStyle = '#ff9a1f'; x.fillRect(0, 0, 64, 24); x.fillStyle = '#111';
+            for (let k = 0; k < 4; k++) { x.beginPath(); const ox = 6 + k * 14; x.moveTo(ox, 4); x.lineTo(ox + 8, 12); x.lineTo(ox, 20); x.lineTo(ox + 4, 20); x.lineTo(ox + 12, 12); x.lineTo(ox + 4, 4); x.fill(); }
+            const board = new THREE.Mesh(new THREE.PlaneGeometry(3, 1.1), cel({ map: new THREE.CanvasTexture(cv), side: THREE.DoubleSide }));
+            const ex = c.ax + c.ux * 6 + c.lx * (c.hw + 1.2), ez = c.az + c.uz * 6 + c.lz * (c.hw + 1.2);
+            board.position.set(ex, c.ay + 1.9, ez); board.rotation.y = Math.atan2(c.lx, c.lz);
+            group.add(board);
+            for (const s2 of [-1.2, 1.2]) { const post = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.9, 0.12), cel({ color: '#3a3a40' })); post.position.set(ex + c.ux * s2, c.ay + 0.95, ez + c.uz * s2); group.add(post); }
+        }
+    }
+    // clear the trees, posts and barriers out of the way (instanced scenery inside a cut's corridor)
+    if (cuts.length) {
+        const m4 = new THREE.Matrix4(), p = new THREE.Vector3(), zero = new THREE.Matrix4().makeScale(0, 0, 0);
+        group.updateMatrixWorld(true);
+        group.traverse((o) => {
+            if (!o.isInstancedMesh) return;
+            let changed = false;
+            for (let n = 0; n < o.count; n++) {
+                o.getMatrixAt(n, m4); p.setFromMatrixPosition(m4).applyMatrix4(o.matrixWorld);
+                for (const c of cuts) {
+                    const dx = p.x - c.ax, dz = p.z - c.az, u = (dx * c.ux + dz * c.uz) / c.len, dl = Math.abs(dx * c.lx + dz * c.lz);
+                    if (u > -0.08 && u < 1.08 && dl < c.hw + 3) { o.setMatrixAt(n, zero); changed = true; break; }
+                }
+            }
+            if (changed) o.instanceMatrix.needsUpdate = true;
+        });
+    }
+
     // Positions on the grid, behind the start line.
     const gridSlot = (n) => {
         const row = Math.floor(n / 2), col = n % 2;
@@ -369,5 +506,5 @@ export function buildTrack(def, TX) {
     };
 
     if (def.ground === 'water' || def.ground === 'lava') anim.push((t) => { groundMap.offset.set(t * 0.4, t * (def.ground === 'lava' ? 0.15 : 0.6)); });
-    return { def, group, sky, S, N, L, seg, query, gridSlot, M, signs, boosts, animate: (t) => anim.forEach((f) => f(t)) };
+    return { def, group, sky, S, N, L, seg, query: queryAll, cuts, gridSlot, M, signs, boosts, animate: (t) => anim.forEach((f) => f(t)) };
 }

@@ -7,7 +7,7 @@ window.SEA = window.SEA || {};
     // Project links point to the live site, so this page works from anywhere.
     S.HOME = 'https://heind.nl/';
     // Pages that ship with this site stay relative, so they also work when testing locally.
-    S.LOCAL = ['subshootica-dx.html'];
+    S.LOCAL = ['subshootica-dx.html', 'rally.html', 'showdown.html'];
     S.link = (p) => (!p || p === '#') ? null : S.LOCAL.includes(p) ? p : new URL(p, S.HOME).href;
 
     // type: 'human' = handmade, 'partial-ai' = AI-assisted, 'full-ai' = vibe coded, null = no stamp
@@ -19,6 +19,18 @@ window.SEA = window.SEA || {};
           story: ["Subshootica was born from my love of classic GameBoy games and shoot 'em ups. I gave myself strict GameBoy rules: a 4-colour palette of greens, a 160×144 resolution, simple sprites, chiptune audio and very few buttons.",
                   "You pilot a submarine through trickier and trickier waves of enemies, with power-ups, boss fights against the leaders of the evil Takoyaki Clan, and a high score to chase. I drew every sprite in Aseprite; the game itself is vanilla JavaScript on an HTML5 canvas."],
           learned: ['game feel and feedback beat extra features', 'balancing difficulty curves and enemy patterns', 'playtest early, and often', 'constraints make you more creative', 'cutting my big upgrade tree made the game tighter and more fun'] },
+        { id: 'gravel-riot', title: 'Gravel Riot', year: 2026, date: '2026-11-23', img: 'gravelriot', type: 'full-ai', featured: true,
+          desc: 'An arcade rally racer that looks like a late-90s console game: nearly 30 tracks, cups, battle arenas, takedowns and an open world to roam, day and night.',
+          tech: ['JavaScript', 'three.js'], demo: 'rally.html',
+          story: ["Gravel Riot is an arcade rally game in a dithered, cel-shaded style, like a racer you'd rent from the video store in 1999. Dirt switchbacks, desert canyons, a neon expressway, a Dutch polder and a free-roam world with traffic, trains, rivals and golden ducks to find.",
+                  "There are cups, a battle mode with balloons and power-ups, Burnout-style takedowns, photo mode and replays. The scenery has baked light and shadows, and at night your headlights throw real shadows down the road.",
+                  "I had the ideas and played every build; an AI wrote the code."] },
+        { id: 'yard-sale-showdown', title: 'Yard Sale Showdown', year: 2026, date: '2026-11-24', img: 'showdown', type: 'full-ai', featured: true,
+          desc: 'A fast arena shooter where everyday people fight with water pistols, leaf blowers, golf clubs and bottle rockets. Up to 16 players online, with bots, and Conquest in shopping carts.',
+          tech: ['JavaScript', 'three.js', 'WebRTC'], demo: 'showdown.html',
+          story: ["Yard Sale Showdown is a first-person shooter with the movement of the old arena shooters: dodges, slides and slide-jumps. The weapons are junk from a yard sale, and the fighters are a janitor, a chef, a lifeguard, a lollipop lady and friends.",
+                  "Deathmatch, Duel, Team Deathmatch, Gun Game and one-weapon modes, in an arena style with pickups or a tactical style with loadouts. Conquest is 8 vs 8 on big maps, with flags, tickets, classes and vehicles: a shopping cart, a ride-on lawnmower, a golf cart and an ice cream van.",
+                  "Every map is built from a photo, with its colours and light taken from it. Play alone against bots, or host a room and share the code with friends. I had the ideas and playtested; an AI wrote the code."] },
         { id: 'ziswell', title: 'Ziswell', year: 2024, date: '2024-03-15', img: 'ziswell', type: 'human', featured: true,
           desc: 'Remember the 90s? Fortune favours the old.',
           tech: ['HTML', 'CSS', 'JavaScript'], demo: 'projects/ziswell/ziswell.html?fromhome' },
@@ -157,7 +169,11 @@ window.SEA = window.SEA || {};
         "leave the site alone for a minute. something might fly by.",
         "the flipdot display in the midnight zone takes requests.",
         "click a crate to open it up. there's more inside.",
-        "in a hurry? View > Skip the Dive turns all of this off."
+        "in a hurry? View > Skip the Dive turns all of this off.",
+        "something with its headlights still on is parked at the very bottom. go have a look.",
+        "type 'vroom'. it's not street legal.",
+        "someone lost their shopping cart in the abyss. it still has a price tag on it.",
+        "type 'frag'. then type it again. and again."
     ];
 
     S.BOTTLE_NOTES = [
@@ -168,7 +184,8 @@ window.SEA = window.SEA || {};
         "S.O.S. = send oceanic snacks.",
         "this bottle: 100% handmade. this note: AI-assisted.",
         "day 41. the fish still won't tell me where they keep the wifi.",
-        "you're doing great. keep diving."
+        "you're doing great. keep diving.",
+        "YARD SALE! everything must go. bring your own leaf blower."
     ];
 
     /* ---------- Ship's Papers (CV) ----------

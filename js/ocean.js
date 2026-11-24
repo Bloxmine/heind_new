@@ -692,6 +692,151 @@
         return e;
     }
 
+    /* ---------- the two games' eggs: pixel sprites ---------- */
+    const EGG_PAL = { K: '#1a1a22', W: '#3b8fd4', B: '#e8e8e0', S: '#e8562a', Y: '#fff1a6', D: '#b52a2a', G: '#2e2e3e', F: '#9ca5ad', M: '#6b6b80', H: '#e8562a', T: '#ffd23f' };
+    // a rally car from Gravel Riot, facing left (headlight on the left, tail light on the right)
+    const RALLY_CAR = [
+        '.....KKKKKKK......',
+        '....KWWWKWWWK.....',
+        '...KWWWWKWWWWK....',
+        '.KKBBBBBBBBBBBBBK.',
+        'KYBBBBBBBBBBBBBBDK',
+        'KBSSSSSSSSSSSSSSBK',
+        'KBBBBBBBBBBBBBBBBK',
+        '.KKGGGKKKKKKGGGKK.',
+        '...GGG......GGG...'
+    ];
+    // a shopping cart from Yard Sale Showdown's Conquest, handle on the left
+    const CART = [
+        'HH................',
+        '.H................',
+        '.FFFFFFFFFFFFFFFF.',
+        '..F.M.M.M.M.M.M.F.',
+        '..FMMMMMMMMMMMMMF.',
+        '...F.M.M.M.M.M.F..',
+        '...FMMMMMMMMMMMF..',
+        '....FFFFFFFFFFF...',
+        '....F.........F...',
+        '...GGG.......GGG..'
+    ];
+    const eggK = () => Math.max(1, Math.round(W / 400));
+    // draws a sprite standing on (x, y) on screen; returns its box in world rows
+    const sprite = (rows, x, y, k, rot = 0, flip = false) => {
+        const w = rows[0].length, h = rows.length;
+        bx.save(); bx.translate(Math.round(x), Math.round(y)); if (rot) bx.rotate(rot);
+        for (let r = 0; r < h; r++) for (let c = 0; c < w; c++) {
+            const ch = rows[r][flip ? w - 1 - c : c];
+            if (ch === '.') continue;
+            bx.fillStyle = EGG_PAL[ch]; bx.fillRect(Math.round((c - w / 2) * k), (r - h) * k, k, k);
+        }
+        bx.restore();
+        return bbWorld({ x0: x - (w * k) / 2, x1: x + (w * k) / 2, y0: y - h * k, y1: y });
+    };
+    // a headlight beam: cut out of the darkness, pointing along dir (-1 left, 1 right)
+    const beam = (c, hx, hy, dir, len, a) => {
+        const g = c.createLinearGradient(hx, hy, hx + dir * len, hy);
+        g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+        c.fillStyle = g;
+        c.beginPath(); c.moveTo(hx, hy - 1); c.lineTo(hx + dir * len, hy - len * 0.3); c.lineTo(hx + dir * len, hy + len * 0.32); c.closePath(); c.fill();
+    };
+
+    /* Gravel Riot: a rally car that took the coast road a bit too literally, parked on the bottom with its lights on */
+    function RallyWreck() {
+        const e = { layer: 'mid', x: 0, k: 1, on: 1, flick: 0, bb: null };
+        e.place = () => { e.k = eggK(); e.x = W * 0.47; };
+        e.tick = (dt) => {
+            // the battery's nearly flat: now and then the lights stutter
+            if (e.flick > 0) { e.flick -= dt; e.on = Math.sin(e.flick * 60) > 0 ? 1 : 0.15; } else { e.on = 1; if (R() < dt * 0.12) e.flick = 0.5; }
+        };
+        e.head = () => [e.x - 8 * e.k, floorW - camRow + 2 - 5 * e.k];
+        e.draw = () => {
+            const fy = floorW - camRow;
+            if (fy > H + 60 || fy < -20) { e.bb = null; return; }
+            e.bb = sprite(RALLY_CAR, e.x, fy + 2, e.k, 0.07);
+        };
+        e.dark = (c) => {
+            const fy = floorW - camRow;
+            if (fy > H + 60 || fy < -20) return;
+            const [hx, hy] = e.head();
+            beam(c, hx, hy, -1, clamp(W * 0.2, 50, 120), 0.95 * e.on);
+            light(c, hx, hy, 7 * e.k, e.on);
+            light(c, e.x, fy - 4 * e.k, 14 * e.k, 0.5);
+        };
+        e.glow = () => {
+            const fy = floorW - camRow;
+            if (fy > H + 60 || fy < -20) return;
+            const [hx, hy] = e.head(), L = clamp(W * 0.2, 50, 120);
+            bx.fillStyle = `rgba(255,241,166,${0.1 * e.on})`;
+            bx.beginPath(); bx.moveTo(hx, hy - 1); bx.lineTo(hx - L, hy - L * 0.3); bx.lineTo(hx - L, hy + L * 0.32); bx.closePath(); bx.fill();
+            bx.fillStyle = e.on > 0.5 ? '#ffffff' : '#6b6b80';
+            bx.fillRect(Math.round(hx) - e.k, Math.round(hy) - e.k, 2 * e.k, e.k);
+            bx.fillStyle = '#b52a2a'; bx.fillRect(Math.round(e.x + 8 * e.k), Math.round(hy), e.k, e.k);
+        };
+        e.hit = (x, y) => inBB(e.bb, x, y, 3);
+        e.click = () => {
+            sfx('vroom');
+            burst(e.x + 9 * e.k, floorW - 4 * e.k, 10, 3);
+            e.flick = 0.6;
+            S.eggRally && S.eggRally();
+        };
+        return e;
+    }
+
+    /* Yard Sale Showdown: a shopping cart, lost in the abyss, still wearing its price tag (glow-in-the-dark) */
+    function LostCart(y, rnd) {
+        const e = { layer: 'mid', x: 0, y, k: 1, ph: rnd() * TAU, bb: null };
+        e.place = () => { e.k = eggK(); e.x = W * 0.12; };
+        e.tick = (dt) => { e.x += 3.5 * dt; if (e.x > W + 30) e.x = -30; };
+        e.pos = () => [e.x, e.y - camRow + Math.sin(t * 0.5 + e.ph) * 3, Math.sin(t * 0.3 + e.ph) * 0.45 + 0.15];
+        e.tag = () => {
+            const [x, y, a] = e.pos(), k = e.k, lx = 7 * k, ly = -8 * k, sw = Math.sin(t * 1.4) * 0.3;
+            const tx = x + lx * Math.cos(a) - ly * Math.sin(a), ty = y + lx * Math.sin(a) + ly * Math.cos(a);
+            return [tx + Math.sin(sw) * 3 * k, ty + Math.cos(sw) * 3 * k, tx, ty];
+        };
+        e.draw = () => {
+            if (!onScreen(e.y, 40)) { e.bb = null; return; }
+            const [x, y, a] = e.pos();
+            e.bb = sprite(CART, x, y, e.k, a);
+            const [gx, gy, sx, sy] = e.tag();
+            bx.strokeStyle = '#9ca5ad'; bx.lineWidth = 1;
+            bx.beginPath(); bx.moveTo(sx, sy); bx.lineTo(gx, gy); bx.stroke();
+        };
+        e.dark = (c) => {
+            if (!onScreen(e.y, 40)) return;
+            const [x, y] = e.pos(), [gx, gy] = e.tag();
+            light(c, gx, gy, 9 * e.k, 0.9);
+            light(c, x, y - 5 * e.k, 16 * e.k, 0.45);
+        };
+        e.glow = () => {
+            if (!onScreen(e.y, 40)) return;
+            const [gx, gy] = e.tag(), k = e.k;
+            bx.fillStyle = '#ffd23f'; bx.fillRect(Math.round(gx - k), Math.round(gy), 3 * k, 2 * k);
+            bx.fillStyle = '#e8562a'; bx.fillRect(Math.round(gx), Math.round(gy), k, k);
+        };
+        e.hit = (x, y2) => inBB(e.bb, x, y2, 4);
+        e.click = () => { sfx('kaching'); burst(e.x, e.y, 8, 6); S.eggShowdown && S.eggShowdown(); };
+        return e;
+    }
+
+    // typing "vroom": a Gravel Riot car drives across whatever you're looking at, with one big jump
+    O.vroom = () => {
+        ents = ents.filter((q) => !q.gone);
+        const k = eggK(), y = camRow + H * 0.66, v = Math.max(70, W * 0.5);
+        const e = { layer: 'mid', x: -12 * k, y, k, gone: false };
+        const hop = () => { const p = e.x / W; return p > 0.38 && p < 0.62 ? Math.sin(((p - 0.38) / 0.24) * Math.PI) : 0; };
+        e.tick = (dt) => {
+            e.x += v * dt;
+            if (R() < dt * 25) burst(e.x - 9 * k, e.y - 2 * k - hop() * 22 * k, 1, 2);
+            if (e.x > W + 14 * k) e.gone = true;
+        };
+        e.draw = () => { if (!e.gone) sprite(RALLY_CAR, e.x, e.y - camRow - hop() * 22 * k, k, -hop() * 0.25 + (e.x / W > 0.5 && hop() > 0 ? 0.35 * hop() : 0), true); };
+        e.dark = (c) => { if (!e.gone) { const hy = e.y - camRow - hop() * 22 * k - 5 * k; beam(c, e.x + 8 * k, hy, 1, 60, 0.9); light(c, e.x, hy, 14 * k, 0.6); } };
+        e.glow = () => { if (!e.gone) { bx.fillStyle = '#ffffff'; bx.fillRect(Math.round(e.x + 7 * k), Math.round(e.y - camRow - hop() * 22 * k - 5 * k), 2 * k, k); } };
+        ents.push(e);
+        sfx('vroom');
+        O.dirty = true;
+    };
+
     /* ---------- layout & population ---------- */
     const pageTop = (el) => el.getBoundingClientRect().top + window.scrollY;
 
@@ -742,12 +887,14 @@
             for (let i = 0; i < 2; i++) add(Dumbo(rnd() * W, ab.top + ab.h * (0.25 + i * 0.4), rnd));
             add(Angler(rnd() * W, ab.top + ab.h * 0.6, rnd));
             for (let i = 0; i < 3; i++) add(Jelly(rnd() * W, ab.top + ab.h * rnd(), ['#6fdde0', '#ff4fd8'][i % 2], rnd));
+            add(LostCart(ab.top + ab.h * 0.45, rnd));
         }
         if (hd) {
             add(Snailfish(hd.top + hd.h * 0.2, rnd));
             add(Snailfish(hd.top + hd.h * 0.4, rnd));
         }
         add(Floor(rnd));
+        add(RallyWreck());
         eye = add(Eye());
         sphere = add(Sphere());
 
